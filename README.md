@@ -8,6 +8,16 @@ verwaltet (Chat-Verlauf, Modell/Prompt, Systemstatus, Tools, Wissen). Die Spring
 Anwendung ist das Herzstück: sie orchestriert alle Dienste und liefert das Dashboard.
 Das Verzeichnis `GR_Auk` ist leer – Greenfield.
 
+## Einteilung
+
+| Name | Rolle |
+|---|---|
+| Kreiter | Server Aufbau |
+| Brenner, Hiebler | Backend |
+| Zheng, Zugaj | Frontend |
+| Steinwidder | TTS |
+| Radaelli | STT |
+
 ## Getroffene Entscheidungen
 
 | Thema | Entscheidung | Begründung |
