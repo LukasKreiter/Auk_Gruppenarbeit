@@ -50,6 +50,6 @@ die Code-Doku in [`docs/CODE.md`](docs/CODE.md).
 |---|---|---|
 | **Tool** | Eine Java-Methode mit `@Tool`, die das Modell aufrufen darf (Timer, Wetter, …). | `tools/builtin/*` |
 | **Tool-Einstellung** | Pro Tool: aktiv ja/nein, Bestätigung nötig ja/nein. | `ToolSetting`, Tabelle `tool_setting` |
-| **Bestätigungspflicht** | Das Tool läuft erst, nachdem der Nutzer im Dashboard zugestimmt hat; sonst Abbruch nach Timeout. | `ConfirmationGate` |
+| **Bestätigungspflicht** | Das Tool läuft erst, nachdem der Nutzer im Dashboard zugestimmt hat; sonst Abbruch nach Timeout. Tools mit `@RequiresConfirmation` lassen sich nicht ohne Bestätigung schalten. | `ConfirmationGate`, `@RequiresConfirmation` |
 | **Tool-Aufruf** | Protokoll eines Aufrufs (Name, Argumente, Ergebnis) zu einer Nachricht. | Tabelle `tool_call` |
 | **Allowlist** | Liste der Programme, die `openApplication` starten darf. | `jarvis.tools.open-application.allowlist` |

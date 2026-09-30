@@ -95,7 +95,7 @@ Auk_Gruppenarbeit/
 ├── jarvis/                    Spring Boot (Maven)
 │   ├── pom.xml
 │   └── src/main/java/de/grauk/jarvis/
-│       ├── JarvisApplication.java   @SpringBootApplication (fehlt noch)
+│       ├── JarvisApplication.java   @SpringBootApplication
 │       ├── assistant/         AssistantService, AssistantEvent, ChatProviderRegistry, ChatClientConfig, PromptTemplates
 │       ├── conversation/      Conversation, Message (JPA), Repositories
 │       ├── voice/             VoiceServiceClient, VoiceController, VoiceSelector

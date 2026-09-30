@@ -8,11 +8,11 @@
 		<version>4.1.1</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
-	<groupId>com.example</groupId>
+	<groupId>de.grauk</groupId>
 	<artifactId>jarvis</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name/>
-	<description/>
+	<name>jarvis</name>
+	<description>Jarvis – lokaler Sprachassistent</description>
 	<url/>
 	<licenses>
 		<license/>
@@ -69,7 +69,7 @@
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
-			<artifactId>spring-ai-starter-vector-store-azure</artifactId>
+			<artifactId>spring-ai-starter-model-anthropic</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.ai</groupId>

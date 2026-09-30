@@ -1,0 +1,86 @@
+spring:
+  application:
+    name: jarvis
+  datasource:
+    url: jdbc:h2:file:./data/jarvis;AUTO_SERVER=FALSE
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  h2:
+    console:
+      # aus (DNS-Rebinding -> Code-Ausführung); lokal zum Debuggen: SPRING_H2_CONSOLE_ENABLED=true
+      enabled: false
+      settings:
+        web-allow-others: false
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 25MB
+  ai:
+    ollama:
+      base-url: ${JARVIS_LLM_URL:http://llm-server:11434}
+      init:
+        pull-model-strategy: never
+      chat:
+        options:
+          model: qwen3:8b
+          keep-alive: 30m
+      embedding:
+        options:
+          model: bge-m3
+    anthropic:
+      # nur aus der Umgebungsvariable, nie hier eintragen (ADR 0002)
+      api-key: ${ANTHROPIC_API_KEY:}
+    chat:
+      client:
+        # ChatClients werden in assistant/ChatClientConfig explizit gebaut (ADR 0002)
+        enabled: false
+      memory:
+        repository:
+          jdbc:
+            # Schema kommt aus Flyway (db/migration)
+            initialize-schema: never
+    model:
+      # spring.ai.model.chat bewusst NICHT setzen, sonst fehlt einer der beiden ChatModels.
+      # Embeddings immer Ollama/bge-m3 (ADR 0003)
+      embedding: ollama
+
+server:
+  address: 127.0.0.1
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+jarvis:
+  assistant:
+    default-provider: OLLAMA
+    anthropic-models:
+      - claude-sonnet-5-5
+      - claude-haiku-4-5-20251001
+    memory-window: 20
+  voice:
+    base-url: ${JARVIS_VOICE_URL:http://llm-server:8090}
+    token: ${JARVIS_VOICE_TOKEN:}
+  knowledge:
+    vector-store-file: ./data/vector-store.json
+    similarity-threshold: 0.6
+    top-k: 4
+  tools:
+    confirmation-timeout: 60s
+    weather:
+      geocoding-url: https://geocoding-api.open-meteo.com/v1/search
+      forecast-url: https://api.open-meteo.com/v1/forecast
+      timeout: 5s
+    open-application:
+      allowlist:
+        notepad: C:\Windows\System32\notepad.exe
+        rechner: C:\Windows\System32\calc.exe

@@ -1,0 +1,11 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:jarvis-test;DB_CLOSE_DELAY=-1
+
+jarvis:
+  knowledge:
+    vector-store-file: ${java.io.tmpdir}/jarvis-test-vector-store.json
+
+  assistant:
+    anthropic-models:
+      - claude-sonnet-5-5
