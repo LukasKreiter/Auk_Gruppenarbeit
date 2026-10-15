@@ -1,0 +1,25 @@
+<!doctype html>
+<!-- Platzhalter, bis das Frontend-Team die echten Templates baut. -->
+<html xmlns:th="http://www.thymeleaf.org" lang="de">
+<head th:replace="~{fragments/layout :: head('Chat')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: nav}"></nav>
+<p class="error" th:if="${error}" th:text="${error}"></p>
+<p>Provider: <span th:text="${settings.provider}"></span> / <span th:text="${settings.model}"></span>
+  <strong th:if="${cloudActive}">(Cloud aktiv)</strong></p>
+
+<h2>Unterhaltungen</h2>
+<div th:replace="~{fragments/conversation-list :: list}"></div>
+
+<th:block th:if="${activeConversation != null}">
+  <h2 th:text="${activeConversation.title}">Unterhaltung</h2>
+  <p th:if="${#lists.isEmpty(messages)}">Noch keine Nachrichten.</p>
+  <div th:each="m : ${messages}">
+    <p><strong th:text="${m.role}">USER</strong>: <span th:text="${m.content}"></span></p>
+    <ul th:unless="${#lists.isEmpty(m.toolCalls)}">
+      <li th:each="t : ${m.toolCalls}" th:text="${t.toolName} + '(' + ${t.arguments} + ') → ' + ${t.result}"></li>
+    </ul>
+  </div>
+</th:block>
+</body>
+</html>

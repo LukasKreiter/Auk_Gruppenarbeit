@@ -1,0 +1,27 @@
+<!doctype html>
+<!-- Platzhalter, bis das Frontend-Team die echten Templates baut. -->
+<html xmlns:th="http://www.thymeleaf.org" lang="de">
+<head th:fragment="head(title)">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="'Jarvis – ' + ${title}">Jarvis</title>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 0; padding: 12px; }
+    nav a { margin-right: 12px; }
+    .error { color: #b00; }
+    table { border-collapse: collapse; }
+    td, th { border: 1px solid #ccc; padding: 2px 6px; text-align: left; vertical-align: top; }
+  </style>
+</head>
+<body>
+<nav th:fragment="nav">
+  <a th:href="@{/}">Chat</a>
+  <a th:href="@{/status}">Status</a>
+  <a th:href="@{/settings}">Einstellungen</a>
+  <a th:href="@{/tools}">Tools</a>
+  <a th:href="@{/knowledge}">Wissen</a>
+  <a th:href="@{/test.html}">API-Testbench</a>
+  <hr>
+</nav>
+</body>
+</html>

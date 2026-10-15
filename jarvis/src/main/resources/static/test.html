@@ -1,0 +1,360 @@
+<!doctype html>
+<!--
+  Test-Frontend nur zum Bug-Hunting / Fehlertests der JSON-API. Kein Produkt-UI.
+  Aufruf: http://localhost:9090/test.html (gleiche Origin, sonst blockt der LocalOnlyFilter POST/PUT/DELETE).
+-->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jarvis API Testbench</title>
+<style>
+  body { font: 13px/1.4 system-ui, sans-serif; margin: 0; padding: 12px; background: #f4f4f4; color: #222; }
+  h2 { font-size: 14px; margin: 0 0 8px; }
+  section { background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 10px; margin-bottom: 12px; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
+  input, select, textarea, button { font: inherit; }
+  textarea { width: 100%; box-sizing: border-box; font-family: monospace; }
+  pre { background: #111; color: #ddd; padding: 8px; margin: 6px 0 0; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+  button { cursor: pointer; padding: 3px 8px; }
+  .presets button { font-size: 12px; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  td, th { border: 1px solid #ddd; padding: 3px 6px; text-align: left; vertical-align: top; }
+  .ok { background: #dfd; } .fail { background: #fdd; } .warn { background: #ffd; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  code { background: #eee; padding: 0 3px; }
+</style>
+</head>
+<body>
+
+<section>
+  <h2>Kontext</h2>
+  <div class="row">
+    Konversation-Id <code>{cid}</code>: <input id="cid" size="6">
+    <button onclick="newConv()">Neue Konversation</button>
+    <button onclick="send('GET','/api/conversations')">Liste</button>
+    <button onclick="send('GET','/api/status')">Status</button>
+    <button onclick="send('GET','/actuator/health')">Health</button>
+    <button onclick="send('GET','/api/logs?level=WARN')">Logs WARN+</button>
+  </div>
+</section>
+
+<div class="grid">
+<section>
+  <h2>Request-Konsole</h2>
+  <div class="row">
+    <select id="method"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option><option>PATCH</option></select>
+    <input id="path" size="40" value="/api/conversations">
+    <select id="ctype">
+      <option>application/json</option><option>text/plain</option><option>application/xml</option><option value="">(kein Content-Type)</option>
+    </select>
+    <button onclick="sendForm()">Senden</button>
+  </div>
+  <textarea id="body" rows="5" placeholder="Body (leer = keiner). {cid} wird ersetzt."></textarea>
+  <div class="row presets" id="presets"></div>
+  <pre id="out">–</pre>
+</section>
+
+<section>
+  <h2>Chat-Stream (POST …/messages, SSE)</h2>
+  <textarea id="chatText" rows="3">Hallo, wie spät ist es?</textarea>
+  <div class="row">
+    lang <input id="chatLang" size="4" value="de">
+    sttMs <input id="chatStt" size="6">
+    <button onclick="stream()">Stream starten</button>
+    <button onclick="abortStream()">Abbrechen (Client)</button>
+    <button onclick="stream();stream()">2× parallel (→409?)</button>
+    <button onclick="stream();setTimeout(()=>send('DELETE','/api/conversations/{cid}'),300)">Stream + Delete (→409?)</button>
+  </div>
+  <div class="row" id="confirmBox"></div>
+  <pre id="sse">–</pre>
+  <h2 style="margin-top:10px">Dashboard-Events (GET /api/events)</h2>
+  <div class="row">
+    <button onclick="events()">Verbinden</button>
+    <button onclick="es && es.close(); logEv('geschlossen')">Trennen</button>
+    <button onclick="for(let i=0;i<25;i++) new EventSource('/api/events')">25 Clients öffnen (Limit 20)</button>
+  </div>
+  <pre id="ev">–</pre>
+</section>
+</div>
+
+<section>
+  <h2>Upload (POST /api/knowledge/documents)</h2>
+  <div class="row">
+    <input type="file" id="file">
+    <button onclick="upload()">Hochladen</button>
+    <button onclick="uploadBlob('', 'leer.txt')">Leere Datei</button>
+    <button onclick="uploadBlob('\u0000\u0001\u0002binär', 'x.exe')">Binärmüll .exe</button>
+    <button onclick="uploadBlob('a', '../../etc/passwd')">Pfad im Dateinamen</button>
+    <button onclick="uploadBlob('x'.repeat(26*1024*1024), 'gross.txt')">26 MB (Limit 25)</button>
+  </div>
+</section>
+
+<section>
+  <h2>Fehlertests (automatisch)</h2>
+  <div class="row">
+    <button onclick="runAll()">Alle ausführen</button>
+    <span>Prüft Status, <code>application/problem+json</code> bei Fehlern und dass keine Stacktraces/Klassennamen im Body stehen.</span>
+  </div>
+  <table><thead><tr><th>#</th><th>Test</th><th>Request</th><th>erwartet</th><th>Status</th><th>Befund</th></tr></thead>
+    <tbody id="results"></tbody></table>
+</section>
+
+<script>
+const $ = id => document.getElementById(id);
+const LONG = n => 'x'.repeat(n);
+const UUID0 = '00000000-0000-0000-0000-000000000000';
+
+function sub(s) { return s == null ? s : String(s).replaceAll('{cid}', $('cid').value || '0'); }
+
+async function req(method, path, body, ctype = 'application/json') {
+  const opts = { method, headers: {} };
+  if (body !== undefined && body !== null && body !== '') {
+    opts.body = body instanceof FormData ? body : sub(typeof body === 'string' ? body : JSON.stringify(body));
+    if (ctype && !(body instanceof FormData)) opts.headers['Content-Type'] = ctype;
+  }
+  const t0 = performance.now();
+  try {
+    const r = await fetch(sub(path), opts);
+    const text = await r.text();
+    return { status: r.status, ctype: r.headers.get('content-type') || '', text, ms: Math.round(performance.now() - t0), headers: r.headers };
+  } catch (e) {
+    return { status: 0, ctype: '', text: 'NETZWERKFEHLER: ' + e, ms: Math.round(performance.now() - t0), headers: new Headers() };
+  }
+}
+
+function pretty(t) { try { return JSON.stringify(JSON.parse(t), null, 2); } catch { return t; } }
+
+async function send(method, path, body, ctype) {
+  $('method').value = method; $('path').value = path;
+  $('body').value = body == null ? '' : body instanceof FormData ? '(multipart)' : (typeof body === 'string' ? body : JSON.stringify(body));
+  const r = await req(method, path, body, ctype);
+  const hdrs = [...r.headers].map(([k, v]) => k + ': ' + v).join('\n');
+  $('out').textContent = `${method} ${sub(path)} → ${r.status} (${r.ms} ms)\n${hdrs}\n\n${pretty(r.text)}`;
+  return r;
+}
+function sendForm() { send($('method').value, $('path').value, $('body').value, $('ctype').value); }
+
+async function newConv() {
+  const r = await send('POST', '/api/conversations', { title: 'Test ' + new Date().toLocaleTimeString() });
+  try { $('cid').value = JSON.parse(r.text).id; } catch {}
+}
+
+// ---- Presets (Konsole) ----
+const presets = [
+  ['Conv anlegen ohne Body', 'POST', '/api/conversations', ''],
+  ['Rename', 'PUT', '/api/conversations/{cid}', { title: 'Umbenannt' }],
+  ['Messages', 'GET', '/api/conversations/{cid}/messages'],
+  ['Delete Conv', 'DELETE', '/api/conversations/{cid}'],
+  ['Tools', 'GET', '/api/tools'],
+  ['Tool togglen', 'PUT', '/api/tools/NAME', { enabled: false, requiresConfirmation: true }],
+  ['Settings', 'GET', '/api/settings'],
+  ['Settings ändern', 'PUT', '/api/settings', { temperature: 0.7 }],
+  ['Settings Reset', 'POST', '/api/settings/reset', ''],
+  ['Dokumente', 'GET', '/api/knowledge/documents'],
+  ['Fakten', 'GET', '/api/knowledge/facts'],
+  ['Confirm', 'POST', '/api/tools/confirmations/' + UUID0, { approved: true }],
+];
+for (const [label, m, p, b] of presets) {
+  const btn = document.createElement('button');
+  btn.textContent = label;
+  btn.onclick = () => send(m, p, b);
+  $('presets').appendChild(btn);
+}
+
+// ---- SSE-Chat über fetch (POST kann EventSource nicht) ----
+let ctrl = null;
+function logSse(s) { const p = $('sse'); p.textContent = (p.textContent === '–' ? '' : p.textContent) + s + '\n'; p.scrollTop = p.scrollHeight; }
+
+async function stream() {
+  if (!$('cid').value) await newConv();
+  const body = { text: $('chatText').value, language: $('chatLang').value || null };
+  if ($('chatStt').value !== '') body.sttMs = Number($('chatStt').value);
+  const c = new AbortController(); ctrl = c;
+  const t0 = performance.now();
+  $('sse').textContent = '';
+  let r;
+  try {
+    r = await fetch(sub('/api/conversations/{cid}/messages'), {
+      method: 'POST', signal: c.signal,
+      headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+      body: JSON.stringify(body) });
+  } catch (e) { logSse('FETCH-FEHLER ' + e); return; }
+  logSse(`HTTP ${r.status} ${r.headers.get('content-type')}`);
+  if (!r.ok || !(r.headers.get('content-type') || '').includes('event-stream')) { logSse(pretty(await r.text())); return; }
+  const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buf = '', tokens = '', terminal = 0;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += value.replaceAll('\r\n', '\n');
+      let i;
+      while ((i = buf.indexOf('\n\n')) >= 0) {
+        const block = buf.slice(0, i); buf = buf.slice(i + 2);
+        let name = 'message', data = [];
+        for (const line of block.split('\n')) {
+          if (line.startsWith(':')) { logSse('  (' + line + ')'); continue; }
+          if (line.startsWith('event:')) name = line.slice(6).trim();
+          else if (line.startsWith('data:')) data.push(line.slice(5).replace(/^ /, ''));
+        }
+        if (!data.length && name === 'message') continue;
+        const d = data.join('\n');
+        const ms = Math.round(performance.now() - t0);
+        if (name === 'token') { try { tokens += JSON.parse(d).text; } catch { logSse('!! token kein JSON: ' + d); } continue; }
+        if (tokens) { logSse('[tokens] ' + tokens); tokens = ''; }
+        logSse(`[${ms}ms] ${name}: ${d}`);
+        if (name === 'done' || name === 'error') terminal++;
+        if (name === 'confirm') showConfirm(JSON.parse(d));
+      }
+    }
+  } catch (e) { logSse('STREAM-ABBRUCH: ' + e); }
+  if (tokens) logSse('[tokens] ' + tokens);
+  logSse(`--- Ende nach ${Math.round(performance.now() - t0)} ms, terminale Events: ${terminal}` +
+    (terminal !== 1 ? '  !! erwartet genau 1 (done|error)' : ''));
+}
+function abortStream() { if (ctrl) { ctrl.abort(); logSse('--- vom Client abgebrochen'); } }
+
+function showConfirm(c) {
+  const box = $('confirmBox');
+  box.innerHTML = '';
+  box.append(`Bestätigung ${c.toolName} ${c.arguments} `);
+  for (const ok of [true, false]) {
+    const b = document.createElement('button');
+    b.textContent = ok ? 'Erlauben' : 'Ablehnen';
+    b.onclick = async () => { await send('POST', '/api/tools/confirmations/' + c.requestId, { approved: ok }); box.innerHTML = ''; };
+    box.append(b);
+  }
+  const twice = document.createElement('button');
+  twice.textContent = '2× bestätigen';
+  twice.onclick = async () => {
+    const a = await req('POST', '/api/tools/confirmations/' + c.requestId, { approved: true });
+    const b = await req('POST', '/api/tools/confirmations/' + c.requestId, { approved: true });
+    $('out').textContent = `1. → ${a.status}\n2. → ${b.status} (erwartet 404)\n${pretty(b.text)}`;
+    box.innerHTML = '';
+  };
+  box.append(twice);
+}
+
+// ---- Dashboard-Events ----
+let es = null;
+function logEv(s) { const p = $('ev'); p.textContent = (p.textContent === '–' ? '' : p.textContent) + new Date().toLocaleTimeString() + ' ' + s + '\n'; }
+function events() {
+  if (es) es.close();
+  es = new EventSource('/api/events');
+  es.onopen = () => logEv('open');
+  es.onerror = () => logEv('error (readyState ' + es.readyState + ')');
+  for (const n of ['ready', 'timer', 'message']) es.addEventListener(n, e => logEv(n + ': ' + e.data));
+}
+
+// ---- Upload ----
+function upload() {
+  const f = $('file').files[0];
+  if (!f) return alert('Datei wählen');
+  const fd = new FormData(); fd.append('file', f);
+  send('POST', '/api/knowledge/documents', fd);
+}
+function uploadBlob(content, name) {
+  const fd = new FormData(); fd.append('file', new Blob([content]), name);
+  send('POST', '/api/knowledge/documents', fd);
+}
+
+// ---- Fehlertests ----
+// [Name, Methode, Pfad, Body, erlaubte Status, Content-Type]
+const cases = [
+  ['Unbekannte Konversation', 'GET', '/api/conversations/999999999', null, [404]],
+  ['Id kein Long', 'GET', '/api/conversations/abc', null, [400]],
+  ['Id Überlauf', 'GET', '/api/conversations/99999999999999999999', null, [400]],
+  ['Negative Id', 'GET', '/api/conversations/-1', null, [404]],
+  ['Kaputtes JSON', 'POST', '/api/conversations', '{"title":', [400]],
+  ['Titel zu lang (201)', 'POST', '/api/conversations', { title: LONG(201) }, [400]],
+  ['Titel falscher Typ', 'POST', '/api/conversations', { title: { a: 1 } }, [400]],
+  ['Body = JSON-Array', 'POST', '/api/conversations', '[]', [400]],
+  ['Falscher Content-Type', 'POST', '/api/conversations', '{"title":"x"}', [415], 'text/plain'],
+  ['XML statt JSON', 'POST', '/api/conversations', '<a/>', [415], 'application/xml'],
+  ['PATCH nicht erlaubt', 'PATCH', '/api/conversations', '{}', [405]],
+  ['Unbekannter Pfad', 'GET', '/api/gibtsnicht', null, [404]],
+  ['Rename leer', 'PUT', '/api/conversations/{cid}', { title: '' }, [400]],
+  ['Rename nur Leerzeichen', 'PUT', '/api/conversations/{cid}', { title: '   ' }, [400]],
+  ['Rename ohne Body', 'PUT', '/api/conversations/{cid}', null, [400]],
+  ['Rename null', 'PUT', '/api/conversations/{cid}', { title: null }, [400]],
+  ['Rename unbekannt', 'PUT', '/api/conversations/999999999', { title: 'x' }, [404]],
+  ['Delete unbekannt', 'DELETE', '/api/conversations/999999999', null, [404]],
+  ['Message an unbekannt', 'POST', '/api/conversations/999999999/messages', { text: 'hi' }, [404]],
+  ['Messages unbekannt (GET)', 'GET', '/api/conversations/999999999/messages', null, [404]],
+  ['Message leer', 'POST', '/api/conversations/{cid}/messages', { text: '' }, [400]],
+  ['Message nur Whitespace', 'POST', '/api/conversations/{cid}/messages', { text: ' \n\t ' }, [400]],
+  ['Message zu lang (8001)', 'POST', '/api/conversations/{cid}/messages', { text: LONG(8001) }, [400]],
+  ['Message ohne text', 'POST', '/api/conversations/{cid}/messages', {}, [400]],
+  ['sttMs negativ', 'POST', '/api/conversations/{cid}/messages', { text: 'hi', sttMs: -1 }, [400]],
+  ['sttMs String', 'POST', '/api/conversations/{cid}/messages', { text: 'hi', sttMs: 'abc' }, [400]],
+  ['language zu lang', 'POST', '/api/conversations/{cid}/messages', { text: 'hi', language: LONG(11) }, [400]],
+  // Backend prüft nur die Länge – 200 ist aktuelles Verhalten, startet aber einen echten LLM-Stream
+  ['language Müll (nur Länge geprüft)', 'POST', '/api/conversations/{cid}/messages', { text: 'hi', language: '<script>' }, [200, 400]],
+  ['Confirm keine UUID', 'POST', '/api/tools/confirmations/abc', { approved: true }, [400]],
+  ['Confirm unbekannt', 'POST', '/api/tools/confirmations/' + UUID0, { approved: true }, [404]],
+  ['Confirm ohne approved', 'POST', '/api/tools/confirmations/' + UUID0, {}, [400]],
+  ['Confirm approved String', 'POST', '/api/tools/confirmations/' + UUID0, { approved: 'ja' }, [400]],
+  ['Tool unbekannt', 'PUT', '/api/tools/gibtsnicht', { enabled: true, requiresConfirmation: false }, [400, 404]],
+  ['Tool ohne Felder', 'PUT', '/api/tools/gibtsnicht', {}, [400]],
+  ['Settings Temperatur 99', 'PUT', '/api/settings', { temperature: 99 }, [400]],
+  ['Settings Temperatur -1', 'PUT', '/api/settings', { temperature: -1 }, [400]],
+  ['Settings Temperatur NaN-String', 'PUT', '/api/settings', { temperature: 'NaN' }, [400]],
+  ['Settings Provider unbekannt', 'PUT', '/api/settings', { provider: 'FOO' }, [400]],
+  ['Settings Modell unbekannt', 'PUT', '/api/settings', { model: 'gibtsnicht:1b' }, [400, 503]],
+  ['Settings Prompt leer', 'PUT', '/api/settings', { systemPrompt: '' }, [400]],
+  ['Settings Prompt riesig', 'PUT', '/api/settings', { systemPrompt: LONG(200000) }, [400]],
+  ['Settings ohne Body', 'PUT', '/api/settings', null, [400]],
+  ['Dokument löschen unbekannt', 'DELETE', '/api/knowledge/documents/999999999', null, [404]],
+  ['Fakt löschen unbekannt', 'DELETE', '/api/knowledge/facts/999999999', null, [404]],
+  ['Upload ohne Datei', 'POST', '/api/knowledge/documents', () => new FormData(), [400]],
+  ['Upload JSON statt Multipart', 'POST', '/api/knowledge/documents', '{}', [400, 415]],
+  ['Logs ungültiges Level', 'GET', '/api/logs?level=BOGUS', null, [400]],
+  // 500, solange die Thymeleaf-Templates (templates/fragments/*) fehlen
+  ['Fragment unbekannte Conv', 'DELETE', '/fragments/conversations/999999999', null, [404]],
+];
+
+// Stacktrace-/Klassennamen-Spuren ("TRACE" als Log-Level ist ok)
+const LEAK = /Exception|\bat [a-z]+\.[a-z]+\.|de\.grauk|org\.springframework|java\.|SQLState|Hibernate|stacktrace/i;
+
+async function runAll() {
+  const tb = $('results'); tb.innerHTML = '';
+  // eigene Konversation, damit {cid} existiert
+  const c = await req('POST', '/api/conversations', { title: 'Fehlertest' });
+  let cid; try { cid = JSON.parse(c.text).id; } catch {}
+  const prev = $('cid').value; $('cid').value = cid ?? '0';
+  let n = 0, bad = 0;
+  for (const [name, m, p, b, expect, ct] of cases) {
+    n++;
+    const r = await req(m, p, typeof b === 'function' ? b() : b, ct ?? 'application/json');
+    const notes = [];
+    let cls = 'ok';
+    if (!expect.includes(r.status)) { cls = 'fail'; notes.push('Status unerwartet'); }
+    if (r.status >= 400 && !p.startsWith('/fragments')) {
+      if (!r.ctype.includes('problem+json')) { notes.push('kein problem+json: ' + r.ctype); if (cls === 'ok') cls = 'warn'; }
+      if (LEAK.test(r.text)) { notes.push('Body leakt Interna'); cls = 'fail'; }
+    }
+    if (r.status === 500) { cls = 'fail'; notes.push('500!'); }
+    if (r.ms > 3000) notes.push(`langsam (${r.ms} ms)`);
+    let detail = ''; try { detail = JSON.parse(r.text).detail ?? ''; } catch { detail = r.text.slice(0, 120); }
+    if (cls !== 'ok') bad++;
+    const tr = document.createElement('tr');
+    tr.className = cls;
+    tr.innerHTML = `<td>${n}</td><td>${esc(name)}</td><td><code>${m} ${esc(sub(p).slice(0, 60))}</code></td>` +
+      `<td>${expect.join('/')}</td><td>${r.status}</td><td>${esc(notes.join('; '))}<br><small>${esc(String(detail).slice(0, 200))}</small></td>`;
+    tr.style.cursor = 'pointer';
+    tr.onclick = () => { $('out').textContent = `${m} ${sub(p)} → ${r.status}\n${r.ctype}\n\n${pretty(r.text)}`; $('out').scrollIntoView(); };
+    tb.appendChild(tr);
+  }
+  await req('DELETE', '/api/conversations/' + cid);
+  $('cid').value = prev;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td colspan="6"><b>${n - bad}/${n} ok, ${bad} auffällig</b> (Zeile anklicken = Antwort anzeigen)</td>`;
+  tb.appendChild(tr);
+}
+
+function esc(s) { return String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
+</script>
+</body>
+</html>

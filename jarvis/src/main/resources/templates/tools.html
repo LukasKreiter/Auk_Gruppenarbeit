@@ -1,0 +1,10 @@
+<!doctype html>
+<!-- Platzhalter, bis das Frontend-Team die echten Templates baut. -->
+<html xmlns:th="http://www.thymeleaf.org" lang="de">
+<head th:replace="~{fragments/layout :: head('Tools')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: nav}"></nav>
+<h2>Tools</h2>
+<div th:replace="~{fragments/tool-list :: list}"></div>
+</body>
+</html>

@@ -1,0 +1,8 @@
+<!-- Platzhalter, bis das Frontend-Team die echten Templates baut. -->
+<div xmlns:th="http://www.thymeleaf.org" th:fragment="list" id="fact-list">
+  <p class="error" th:if="${error}" th:text="${error}"></p>
+  <p th:if="${#lists.isEmpty(facts)}">Keine Fakten.</p>
+  <ul>
+    <li th:each="f : ${facts}" th:text="${f.content}"></li>
+  </ul>
+</div>
