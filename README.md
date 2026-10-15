@@ -5,17 +5,12 @@
 Ziel ist ein „Jarvis“-artiger Assistent, der komplett lokal auf dem Windows-Rechner läuft:
 Sprache rein → lokales LLM → Sprache raus, plus ein Web-Dashboard, das den Assistenten
 verwaltet (Chat-Verlauf, Modell/Prompt, Systemstatus, Tools, Wissen). Die Spring-Boot-
-<<<<<<< Updated upstream
-Anwendung ist das Herzstück: sie orchestriert alle Dienste und liefert das Dashboard.
-Das Verzeichnis `GR_Auk` ist leer – Greenfield.
-=======
 Anwendung `jarvis` läuft auf dem Arbeitsplatz-PC und ist das Herzstück: sie orchestriert alle
 Dienste und liefert das Dashboard. LLM (Ollama) und voice-service laufen auf einem separaten
 GPU-Server im LAN. Optional kann statt des lokalen Modells ein Cloud-Modell (Claude) gewählt werden.
 
 Weitere Doku: [`CONTEXT.md`](CONTEXT.md) (Fachbegriffe), [`docs/adr/`](docs/adr/) (Entscheidungen),
 [`docs/CODE.md`](docs/CODE.md) (Code-Doku Backend KI-Kern), [`docs/CODE-INFRASTRUKTUR.md`](docs/CODE-INFRASTRUKTUR.md) (Code-Doku Backend Infrastruktur).
->>>>>>> Stashed changes
 
 ## Einteilung
 

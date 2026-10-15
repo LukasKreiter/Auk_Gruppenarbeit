@@ -1,10 +1,5 @@
 package de.grauk.jarvis.web;
 
-<<<<<<< Updated upstream
-import org.springframework.stereotype.Controller;
-
-@Controller
-=======
 import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
@@ -56,7 +51,6 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @RestController
 @RequestMapping("/api/conversations")
->>>>>>> Stashed changes
 public class ChatController {
 
     private static final Logger log = LoggerFactory.getLogger(ChatController.class);

@@ -256,7 +256,7 @@ class PageControllersTest {
         assertThat(knowledge.getAttribute("error")).isEqualTo("Embedding-Dienst nicht erreichbar");
         assertThat(knowledge.getAttribute("documents")).isNotNull();
 
-        when(documents.ingest(any())).thenThrow(new IllegalStateException("kaputt"));
+        doThrow(new IllegalStateException("kaputt")).when(documents).ingest(any());
         Model unexpected = new ExtendedModelMap();
         fragments.uploadDocument(file(), unexpected);
         assertThat(unexpected.getAttribute("error")).isEqualTo("Vorgang fehlgeschlagen, Details im Log");
