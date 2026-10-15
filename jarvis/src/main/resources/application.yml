@@ -59,6 +59,10 @@ management:
     web:
       exposure:
         include: health,info,metrics
+  endpoint:
+    health:
+      # Details enthalten keine Secrets; der Zugriff ist über LocalOnlyFilter (Host-Header) auf localhost beschränkt
+      show-details: always
 
 jarvis:
   assistant:
@@ -67,6 +71,12 @@ jarvis:
       - claude-sonnet-5-5
       - claude-haiku-4-5-20251001
     memory-window: 20
+  web:
+    # Host-Header und Origin/Referer zustandsändernder Requests (DNS-Rebinding/CSRF, siehe LocalOnlyFilter)
+    allowed-hosts: [localhost, 127.0.0.1]
+    sse-timeout: 10m
+    # Zusätzliche Origins (Schema://Host:Port) für ein Frontend-Dev-Setup; Default leer = nur eigener Port
+    allowed-origins: []
   voice:
     base-url: ${JARVIS_VOICE_URL:http://llm-server:8090}
     token: ${JARVIS_VOICE_TOKEN:}

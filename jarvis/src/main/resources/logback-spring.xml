@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Spring-Boot-Defaults (Konsole inkl. Farben, Logger-Levels) beibehalten -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <!-- Ringpuffer der letzten 200 Zeilen fuer die Status-Seite; Pattern ueberschreibbar via LOG_BUFFER_PATTERN -->
+    <appender name="LOG_BUFFER" class="de.grauk.jarvis.status.LogBufferAppender">
+        <pattern>${LOG_BUFFER_PATTERN:-%d{HH:mm:ss.SSS} %-5level %logger{20} : %msg%n%ex{short}}</pattern>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="LOG_BUFFER"/>
+    </root>
+</configuration>
