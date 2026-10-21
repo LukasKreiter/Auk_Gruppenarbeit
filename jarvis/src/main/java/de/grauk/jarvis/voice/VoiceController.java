@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/voice")
 public class VoiceController {
-public class VoiceController {
 
     private final VoiceServiceClient voiceServiceClient;
 
