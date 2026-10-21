@@ -80,6 +80,12 @@ jarvis:
   voice:
     base-url: ${JARVIS_VOICE_URL:http://llm-server:8090}
     token: ${JARVIS_VOICE_TOKEN:}
+    # Lokale Piper-TTS auf dem Jarvis-PC (voice/VoiceServiceClient); speaker nur bei Mehrsprecher-Modellen
+    piper:
+      executable: ${JARVIS_PIPER_EXE:C:/piper/piper.exe}
+      model: ${JARVIS_PIPER_MODEL:C:/piper/model/de_DE-thorsten-high.onnx}
+      config: ${JARVIS_PIPER_CONFIG:C:/piper/model/de_DE-thorsten-high.onnx.json}
+      speaker: 0
   knowledge:
     vector-store-file: ./data/vector-store.json
     similarity-threshold: 0.6

@@ -36,6 +36,16 @@ class SimpleToolsTest {
     }
 
     @Test
+    void systemStatusShowsUnknownMemoryInsteadOfZero() {
+        MetricsService metrics = mock(MetricsService.class);
+        when(metrics.snapshot()).thenReturn(new SystemSnapshot(-1, -1, -1, null, null));
+
+        String result = new SystemTools(metrics).getSystemStatus();
+
+        assertThat(result).contains("Arbeitsspeicher: unbekannt").doesNotContain("0,0 von 0,0");
+    }
+
+    @Test
     void memoryToolsDelegateAndFormat() {
         FactMemory memory = mock(FactMemory.class);
         when(memory.search(anyString(), anyInt()))

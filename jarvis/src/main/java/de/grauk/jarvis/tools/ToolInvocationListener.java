@@ -15,5 +15,9 @@ public interface ToolInvocationListener {
 
     void onConfirmationRequired(UUID requestId, String toolName, String argumentsJson);
 
-    void onToolCompleted(String toolName, String argumentsJson, String result);
+    void onToolCompleted(String toolName, String argumentsJson, String result, ToolCallStatus status);
+
+    default void onToolCompleted(String toolName, String argumentsJson, String result) {
+        onToolCompleted(toolName, argumentsJson, result, ToolCallStatus.OK);
+    }
 }

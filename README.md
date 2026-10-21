@@ -46,7 +46,7 @@ Weitere Doku: [`CONTEXT.md`](CONTEXT.md) (Fachbegriffe), [`docs/adr/`](docs/adr/
  Browser (Dashboard, Thymeleaf/HTMX/JS)
    │  Mikrofon-Blob (webm/opus)  │ SSE (Token-Stream, Events)  │ WAV-Playback
    ▼                             ▼                             ▲
- ┌────────────────────────── jarvis-server (Spring Boot, :8080) ──────────────────────────┐
+ ┌────────────────────────── jarvis-server (Spring Boot, :9090) ──────────────────────────┐
  │  web/        Thymeleaf-Seiten + HTMX-Fragmente + REST/SSE-Endpoints                    │
  │  assistant/  AssistantService: ChatClient + Advisors (Memory, RAG) + Tools             │
  │  voice/      VoiceServiceClient (HTTP → voice-service), Sprach-/Stimmenwahl            │
@@ -71,7 +71,7 @@ Weitere Doku: [`CONTEXT.md`](CONTEXT.md) (Fachbegriffe), [`docs/adr/`](docs/adr/
 3. Browser sendet den Text über den **gleichen** Chat-Endpoint wie Tastatureingaben: `POST /api/conversations/{id}/messages` → Spring streamt Antwort-Tokens per SSE.
    - `AssistantService` baut den Prompt: System-Prompt (aus Settings) + `MessageChatMemoryAdvisor` (Verlauf aus DB) + `QuestionAnswerAdvisor` (RAG-Kontext) + aktivierte Tools.
    - Tool-Aufrufe werden von Spring AI ausgeführt; das Dashboard bekommt ein SSE-Event „Tool X aufgerufen“.
-4. Nach Stream-Ende: Browser `POST /api/voice/synthesize` mit dem Antworttext → Spring wählt Stimme nach Sprache (Java-Lib `lingua` erkennt DE/EN im Antworttext) → `voice-service /synthesize` → WAV → Browser spielt ab.
+4. Nach Stream-Ende: Browser `POST /api/voice/synthesize` mit `{text, language, messageId}` → Spring wählt die Stimme aus den Einstellungen (`voiceDe`/`voiceEn`, sonst Default-Modell) und erzeugt die WAV **lokal** mit Piper (`voice/VoiceServiceClient`, `jarvis.voice.piper.*`) → Browser spielt ab. Die TTS-Dauer wird an der Nachricht `messageId` gespeichert.
 5. Nachricht + Antwort + Metadaten (Latenzen STT/LLM/TTS, verwendetes Modell, Tool-Aufrufe) landen in H2.
 
 Text- und Sprachweg unterscheiden sich nur in Schritt 2 und 4 – die Chat-Pipeline ist identisch.
@@ -150,7 +150,7 @@ Später: Web-Suche (SearXNG lokal), Kalender, Smart-Home, Dateisuche.
 - Python-venv für `voice-service`, CUDA-fähiges CTranslate2 installieren, Piper-Stimmen herunterladen.
 - Spring-Boot-Projekt über start.spring.io generieren (Web, Thymeleaf, JPA, H2, Flyway, Actuator, Validation, Spring AI Ollama, Chat-Memory-JDBC, Tika-Reader, Vector-Store).
 - `README.md` mit Schritt-für-Schritt-Setup, `start-all.ps1`.
-- **Verifikation:** `curl localhost:11434/api/tags` zeigt Modelle; Spring Boot startet leer auf `127.0.0.1:8080`.
+- **Verifikation:** `curl localhost:11434/api/tags` zeigt Modelle; Spring Boot startet leer auf `127.0.0.1:9090`.
 
 ### Phase 1 – Text-Chat-MVP
 - `AssistantService` mit `ChatClient` (Ollama), System-Prompt, `MessageChatMemoryAdvisor`.
@@ -165,8 +165,8 @@ Später: Web-Suche (SearXNG lokal), Kalender, Smart-Home, Dateisuche.
 - **Verifikation:** deutscher und englischer Satz sprechen → Text korrekt, Sprache korrekt erkannt, Ende-zu-Ende-Latenz STT gemessen und im Message-Datensatz gespeichert; pytest für `/transcribe` mit Beispiel-WAV.
 
 ### Phase 3 – Sprache raus (TTS)
-- `voice-service`: `/synthesize` mit Piper (Stimme nach `language`).
-- Spring: `VoiceSelector` (lingua-Spracherkennung auf Antworttext), `POST /api/voice/synthesize`.
+- Umgesetzt abweichend vom Plan: Piper läuft lokal auf dem Jarvis-PC als Prozess (`jarvis.voice.piper.executable/model/config`, Env `JARVIS_PIPER_EXE`, `JARVIS_PIPER_MODEL`, `JARVIS_PIPER_CONFIG`), nicht im voice-service.
+- Spring: `VoiceSelector` (Stimme aus den Einstellungen je Sprache; die Sprache kommt vom Client, lingua ist noch offen), `POST /api/voice/synthesize` (JSON, max. 2000 Zeichen, höchstens 2 Piper-Prozesse gleichzeitig, TTS-Toggle aus den Einstellungen).
 - Browser: nach Stream-Ende WAV laden und abspielen; „Stopp“-Button; TTS-Toggle.
 - **Verifikation:** gesprochene Frage → gesprochene Antwort in passender Sprache; Latenzen STT/LLM/TTS in DB und Status-Seite.
 

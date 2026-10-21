@@ -47,3 +47,35 @@ document.body.addEventListener('htmx:afterSwap', (e) => {
     e.target.scrollTop = e.target.scrollHeight;
   }
 });
+
+// ---- htmx swaps no 4xx/5xx responses by default: show the problem detail instead of silently doing nothing ----
+function showHtmxError(target, message) {
+  if (!target) return;
+  let box = target.querySelector(':scope > .htmx-error');
+  if (!box) {
+    box = document.createElement('div');
+    box.className = 'htmx-error error';
+    target.prepend(box);
+  }
+  box.textContent = message;
+}
+
+document.body.addEventListener('htmx:responseError', (e) => {
+  const xhr = e.detail.xhr;
+  let message = `Fehler ${xhr.status}`;
+  try {
+    const problem = JSON.parse(xhr.responseText);
+    if (problem && problem.detail) message = problem.detail;
+  } catch (_) {
+    // kein problem+json (z. B. HTML-Fehlerseite): beim Statuscode bleiben
+  }
+  console.error('htmx-Anfrage fehlgeschlagen', e.detail.pathInfo?.requestPath, xhr.status, xhr.responseText);
+  showHtmxError(e.detail.target, message);
+});
+
+document.body.addEventListener('htmx:sendError', (e) => {
+  console.error('htmx-Anfrage nicht gesendet (Server nicht erreichbar?)', e.detail.pathInfo?.requestPath);
+  showHtmxError(e.detail.target, 'Jarvis ist nicht erreichbar.');
+});
+
+// a later successful swap clears the error box automatically, because the target content is replaced

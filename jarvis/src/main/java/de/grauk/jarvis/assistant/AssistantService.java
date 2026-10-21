@@ -15,6 +15,7 @@ import java.util.function.Consumer;
 import com.anthropic.errors.AnthropicServiceException;
 import de.grauk.jarvis.settings.SettingsService;
 import de.grauk.jarvis.settings.SettingsService.SettingsSnapshot;
+import de.grauk.jarvis.tools.ToolCallStatus;
 import de.grauk.jarvis.tools.ToolInvocationListener;
 import de.grauk.jarvis.tools.ToolRegistry;
 
@@ -23,6 +24,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
@@ -51,11 +54,14 @@ public class AssistantService {
     private final ChatProviderRegistry registry;
     private final SettingsService settings;
     private final ToolRegistry toolRegistry;
+    private final ChatMemory chatMemory;
 
-    public AssistantService(ChatProviderRegistry registry, SettingsService settings, ToolRegistry toolRegistry) {
+    public AssistantService(ChatProviderRegistry registry, SettingsService settings, ToolRegistry toolRegistry,
+                            ChatMemory chatMemory) {
         this.registry = registry;
         this.settings = settings;
         this.toolRegistry = toolRegistry;
+        this.chatMemory = chatMemory;
     }
 
     /**
@@ -72,7 +78,7 @@ public class AssistantService {
                 client = registry.clientFor(current.provider());
                 callbacks = toolRegistry.enabledCallbacks();
             } catch (RuntimeException e) {
-                fail(sink, null, e);
+                fail(sink, null, e, List.of());
                 return;
             }
             SettingsSnapshot s = current;
@@ -90,8 +96,9 @@ public class AssistantService {
                 }
 
                 @Override
-                public void onToolCompleted(String toolName, String argumentsJson, String result) {
-                    toolCalls.add(new ToolCallRecord(toolName, argumentsJson, result));
+                public void onToolCompleted(String toolName, String argumentsJson, String result,
+                                            ToolCallStatus status) {
+                    toolCalls.add(new ToolCallRecord(toolName, argumentsJson, result, status));
                 }
             };
             AtomicBoolean ragWarned = new AtomicBoolean();
@@ -104,6 +111,8 @@ public class AssistantService {
 
             StringBuilder fullText = new StringBuilder();
             long start = System.nanoTime();
+            // genau ein Abschluss: Antwort, Fehler/leer (räumt den Verlauf auf) oder Abbruch (onDispose)
+            AtomicBoolean settled = new AtomicBoolean();
 
             // Tool-Ausführung (ConfirmationGate blockiert bis zur Antwort des Nutzers) läuft im ToolCallingAdvisor
             // auf boundedElastic; subscribeOn hält zusätzlich den Aufrufer-Thread frei.
@@ -114,7 +123,7 @@ public class AssistantService {
                     .advisors(a -> a
                             .param(ChatMemory.CONVERSATION_ID, String.valueOf(conversationId))
                             .param(GuardedRagAdvisor.WARNING_SINK_KEY, ragWarning))
-                    .toolCallbacks(callbacks)
+                    .tools(callbacks.toArray())
                     .toolContext(Map.of(ToolInvocationListener.CONTEXT_KEY, listener))
                     .stream()
                     .chatResponse()
@@ -127,21 +136,70 @@ public class AssistantService {
                                     sink.next(new AssistantEvent.Token(text));
                                 }
                             },
-                            error -> fail(sink, s, error),
+                            error -> {
+                                if (settled.compareAndSet(false, true)) {
+                                    forgetUnansweredTurn(conversationId, userText);
+                                }
+                                fail(sink, s, error, List.copyOf(toolCalls));
+                            },
                             () -> {
                                 if (fullText.toString().isBlank()) {
                                     log.warn("Leere Antwort vom Modell {} ({})", s.model(), s.provider());
-                                    sink.next(new AssistantEvent.Error("Das Modell hat keine Antwort geliefert."));
+                                    if (settled.compareAndSet(false, true)) {
+                                        forgetUnansweredTurn(conversationId, userText);
+                                    }
+                                    sink.next(new AssistantEvent.Error("Das Modell hat keine Antwort geliefert.",
+                                            List.copyOf(toolCalls)));
                                     sink.complete();
                                     return;
                                 }
+                                settled.set(true);
                                 long millis = (System.nanoTime() - start) / 1_000_000;
                                 sink.next(new AssistantEvent.Done(fullText.toString(), s.provider(), s.model(),
                                         millis, List.copyOf(toolCalls)));
                                 sink.complete();
                             });
-            sink.onDispose(disposable);
+            sink.onDispose(() -> {
+                disposable.dispose();
+                // Abbruch (Client weg, Timeout): der Memory-Advisor hat die Frage schon gespeichert, die Antwort nie
+                if (settled.compareAndSet(false, true)) {
+                    forgetUnansweredTurn(conversationId, userText);
+                }
+            });
         });
+    }
+
+    /**
+     * Entfernt die unbeantwortete Nutzerfrage (und evtl. Antwortreste) aus dem Chat-Verlauf. Der
+     * {@code MessageChatMemoryAdvisor} speichert die Frage vor dem Modellaufruf, die Antwort nur bei Erfolg; ohne
+     * Aufräumen stünden nach Fehlern mehrere Nutzerfragen hintereinander im Verlauf und verdrängten echte Turns.
+     * Parallele Anfragen derselben Konversation verhindert web/ (StreamActiveException).
+     */
+    void forgetUnansweredTurn(long conversationId, String userText) {
+        String id = String.valueOf(conversationId);
+        try {
+            List<Message> history = chatMemory.get(id);
+            // nur die letzte Frage, und nur wenn danach nichts Inhaltliches mehr kommt: eine gleichlautende frühere,
+            // echt beantwortete Frage (z. B. Abbruch, bevor der Advisor gespeichert hat) bleibt unangetastet
+            int last = history.size() - 1;
+            while (last >= 0 && !(history.get(last) instanceof UserMessage)) {
+                String text = history.get(last).getText();
+                if (text != null && !text.isBlank()) {
+                    return;
+                }
+                last--;
+            }
+            if (last < 0 || !userText.equals(history.get(last).getText())) {
+                return;
+            }
+            List<Message> kept = List.copyOf(history.subList(0, last));
+            chatMemory.clear(id);
+            if (!kept.isEmpty()) {
+                chatMemory.add(id, kept);
+            }
+        } catch (RuntimeException e) {
+            log.warn("Unbeantwortete Frage konnte nicht aus dem Chat-Verlauf {} entfernt werden", id, e);
+        }
     }
 
     private static String textOf(ChatResponse response) {
@@ -183,9 +241,10 @@ public class AssistantService {
         };
     }
 
-    private static void fail(reactor.core.publisher.FluxSink<AssistantEvent> sink, SettingsSnapshot s, Throwable error) {
+    private static void fail(reactor.core.publisher.FluxSink<AssistantEvent> sink, SettingsSnapshot s, Throwable error,
+                             List<ToolCallRecord> toolCalls) {
         log.warn("Anfrage fehlgeschlagen: {}", error.toString(), error);
-        sink.next(new AssistantEvent.Error(userMessage(s == null ? null : s.provider(), error)));
+        sink.next(new AssistantEvent.Error(userMessage(s == null ? null : s.provider(), error), toolCalls));
         sink.complete();
     }
 

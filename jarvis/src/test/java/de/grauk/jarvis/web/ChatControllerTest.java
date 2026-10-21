@@ -224,6 +224,23 @@ class ChatControllerTest {
     }
 
     @Test
+    void errorAfterToolRanPersistsToolCallsAndSendsThem() throws Exception {
+        List<ToolCallRecord> calls = List.of(new ToolCallRecord("setTimer", "{\"minutes\":5}", "Timer gestellt"));
+        when(assistant.stream(eq(1L), any())).thenReturn(
+                Flux.just(new AssistantEvent.Error("LLM-Server nicht erreichbar", calls)));
+        when(conversations.saveFailedAnswer(1, "LLM-Server nicht erreichbar", calls)).thenReturn(new MessageView(
+                message(43, 1, Role.ASSISTANT, "⚠ LLM-Server nicht erreichbar"),
+                List.of(new ToolCall(43, "setTimer", "{\"minutes\":5}", "Timer gestellt"))));
+
+        MvcResult result = sendMessage(1, "{\"text\":\"Timer\"}");
+        awaitBody(result, "event:error");
+
+        assertThat(body(result)).contains("LLM-Server nicht erreichbar", "\"toolName\":\"setTimer\"")
+                .doesNotContain("event:done");
+        verify(conversations).saveFailedAnswer(1, "LLM-Server nicht erreichbar", calls);
+    }
+
+    @Test
     void persistenceFailureBecomesErrorEventNotDone() throws Exception {
         var done = new AssistantEvent.Done("Hi", ChatProvider.OLLAMA, "m", 1, List.of());
         when(assistant.stream(eq(1L), any())).thenReturn(Flux.just(done));

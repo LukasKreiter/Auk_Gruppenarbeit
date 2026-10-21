@@ -44,7 +44,8 @@ public class VoiceHealthClient {
     private final Clock clock;
     private final Duration cacheTtl;
 
-    private static final String UNREADABLE = "ok (Antwort nicht lesbar)";
+    /** Leere/nicht-JSON-Antwort: vermutlich ein anderer Dienst oder eine Proxy-Fehlerseite auf dem Port → down. */
+    private static final String UNREADABLE = "Antwort nicht lesbar (kein voice-service?)";
 
     private final AtomicBoolean unreadableLogged = new AtomicBoolean();
 
@@ -150,9 +151,11 @@ public class VoiceHealthClient {
                 }
             }).retrieve().body(String.class);
             VoiceHealth h = parse(body, now);
-            if (UNREADABLE.equals(h.message()) && unreadableLogged.compareAndSet(false, true)) {
-                log.warn("voice-service /health lieferte eine nicht lesbare oder leere Antwort; "
-                        + "gelte als erreichbar (weitere Fälle werden nicht gemeldet)");
+            // einmal pro Übergang melden: nach einer lesbaren Antwort wird ein erneuter Fall wieder geloggt
+            if (!UNREADABLE.equals(h.message())) {
+                unreadableLogged.set(false);
+            } else if (unreadableLogged.compareAndSet(false, true)) {
+                log.warn("voice-service /health lieferte eine nicht lesbare oder leere Antwort; gilt als down");
             }
             return h;
         } catch (RestClientResponseException e) {
@@ -182,16 +185,16 @@ public class VoiceHealthClient {
 
     static VoiceHealth parse(String body, Instant now) {
         if (body == null || body.isBlank()) {
-            return new VoiceHealth(true, UNREADABLE, List.of(), null, null, null, null, now);
+            return new VoiceHealth(false, UNREADABLE, List.of(), null, null, null, null, now);
         }
         JsonNode root;
         try {
             root = MAPPER.readTree(body);
         } catch (RuntimeException e) {
-            return new VoiceHealth(true, UNREADABLE, List.of(), null, null, null, null, now);
+            return new VoiceHealth(false, UNREADABLE, List.of(), null, null, null, null, now);
         }
         if (root == null || root.isMissingNode()) {
-            return new VoiceHealth(true, UNREADABLE, List.of(), null, null, null, null, now);
+            return new VoiceHealth(false, UNREADABLE, List.of(), null, null, null, null, now);
         }
         boolean up = true;
         String message = "ok";

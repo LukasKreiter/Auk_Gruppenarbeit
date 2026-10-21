@@ -11,7 +11,7 @@ Verantwortlich: **Hiebler**. Umfasst die Pakete `conversation/`, `settings/` und
 
 ```
 Browser (Dashboard, HTMX, EventSource)
-   │ HTTP auf 127.0.0.1:8080
+   │ HTTP auf 127.0.0.1:9090
    ▼
 web/LocalOnlyFilter ── Host-/Origin-/Referer-Prüfung (403)
    ▼
@@ -265,7 +265,7 @@ gegen DNS-Rebinding und CSRF:
   `X-Content-Type-Options: nosniff` und `Referrer-Policy: same-origin` (nicht `no-referrer`, der Filter braucht den Referer als Fallback).
 - Die Antwort nennt keine Gründe (`"Anfrage nicht erlaubt"`), der Grund steht im Log (WARN); abgelehnte Host/Origin/Referer-Werte
   werden dort auf 100 Zeichen gekürzt und Steuerzeichen durch `_` ersetzt (Log-Injection).
-- Nicht-Browser-Clients (curl, Skripte) müssen deshalb `Origin: http://localhost:8080` mitsenden.
+- Nicht-Browser-Clients (curl, Skripte) müssen deshalb `Origin: http://localhost:9090` mitsenden.
 - Die H2-Konsole bleibt aus (siehe `CODE.md`).
 
 ### Fehler-Mapping (`ApiExceptionHandler`)
@@ -346,7 +346,7 @@ Robustheit: `StatusService.report()` sichert jeden Teilwert einzeln ab. Wirft ei
 Ist der aktive Provider `ANTHROPIC` und Claude ohne Key (`UNKNOWN`), stuft die Statusseite die Claude-Ampel auf `DOWN`
 („aktiver Provider nicht verfügbar (kein API-Key)“); der Health-Indikator selbst bleibt `UNKNOWN`.
 `VoiceHealthClient` unterscheidet „Token ungültig (HTTP 401/403)“, „HTTP &lt;code&gt;“ und „Timeout/Verbindung fehlgeschlagen“,
-hängt „down seit &lt;Zeit&gt;“ an, wertet nicht lesbare/leere Antworten als `up` („ok (Antwort nicht lesbar)“) und ruft das Netz
+hängt „down seit &lt;Zeit&gt;“ an, wertet nicht lesbare/leere Antworten als `down` („Antwort nicht lesbar (kein voice-service?)“) und ruft das Netz
 nur als Single-Flight ab (parallele Aufrufer teilen sich einen Request oder bekommen den letzten Wert). CPU-Last
 NaN/negativ ist „unbekannt“ (-1). `LogBufferAppender.isActive()` zeigt, ob der Puffer aktiv ist.
 
@@ -400,6 +400,7 @@ Keine neue Migration; neue Abhängigkeit `com.github.oshi:oshi-core:6.8.0` (Prop
 | `V1__init.sql` | KI-Kern (Brenner): `tool_setting`, `knowledge_document`, `memory_fact`, `SPRING_AI_CHAT_MEMORY` |
 | `V2__assistant_settings.sql` | `assistant_settings` (Singleton `id = 1`) |
 | `V3__conversation.sql` | `conversation`, `message`, `tool_call` |
+| `V4__tool_call_status.sql` | `tool_call.status` (`OK`, `FAILED`, `NOT_EXECUTED`; Altbestand `OK`) |
 
 `V3`: `message.conversation_id → conversation(id) ON DELETE CASCADE`, `tool_call.message_id → message(id) ON DELETE CASCADE`;
 Indizes `idx_conversation_updated_at (updated_at DESC)`, `idx_message_conversation (conversation_id, created_at, id)`,

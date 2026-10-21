@@ -34,7 +34,8 @@ public class TimerTools {
 
     @Tool(description = "Stellt einen Timer, der nach der angegebenen Anzahl Minuten abläuft und den Nutzer "
             + "benachrichtigt. Verwenden bei Wünschen wie 'Stell einen Timer auf 10 Minuten' oder "
-            + "'Erinnere mich in einer Stunde'. Erlaubt sind 1 bis 1440 Minuten.")
+            + "'Erinnere mich in einer Stunde'. Erlaubt sind 1 bis 1440 Minuten. Die Meldung erscheint im "
+            + "Dashboard (bei geschlossenem Dashboard beim nächsten Öffnen); Timer überstehen keinen Neustart von Jarvis.")
     public String setTimer(
             @ToolParam(description = "Dauer in Minuten, ganze Zahl von 1 bis 1440") int minutes,
             @ToolParam(required = false, description = "Kurze Bezeichnung des Timers, z. B. 'Nudeln'") String label) {
@@ -52,6 +53,7 @@ public class TimerTools {
             }
         }, expiresAt);
         String time = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault()).format(expiresAt);
-        return "Timer '" + name + "' gestellt: läuft in " + minutes + " Minuten um " + time + " Uhr ab.";
+        return "Timer '" + name + "' gestellt: läuft in " + minutes + " Minuten um " + time + " Uhr ab. "
+                + "Die Meldung erscheint im Dashboard; bei einem Neustart von Jarvis geht der Timer verloren.";
     }
 }

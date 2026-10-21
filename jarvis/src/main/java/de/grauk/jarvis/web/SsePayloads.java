@@ -24,7 +24,12 @@ public final class SsePayloads {
     public record DonePayload(Long messageId, String text, ChatProvider provider, String model, long llmMs,
                               List<ToolCallDto> toolCalls) {}
 
-    public record ErrorPayload(String message) {}
+    /** {@code toolCalls}: vor dem Fehler schon ausgeführte Tools (sonst leer). */
+    public record ErrorPayload(String message, List<ToolCallDto> toolCalls) {
+        public ErrorPayload(String message) {
+            this(message, List.of());
+        }
+    }
 
     /** Nutzdaten für Events, die direkt aus dem Stream kommen; {@code Done} braucht die gespeicherte Id und wird separat gebaut. */
     static Object of(AssistantEvent event) {

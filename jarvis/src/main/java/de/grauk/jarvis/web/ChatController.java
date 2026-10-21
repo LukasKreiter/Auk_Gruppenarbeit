@@ -259,7 +259,18 @@ public class ChatController {
                 }
                 case AssistantEvent.Error error -> {
                     log.warn("Anfrage in Konversation {} fehlgeschlagen: {}", conversationId, error.userMessage());
-                    terminate(stream, error.sseName(), SsePayloads.of(error));
+                    Object payload = SsePayloads.of(error);
+                    if (!error.toolCalls().isEmpty()) {
+                        try {
+                            MessageView saved = conversations.saveFailedAnswer(conversationId, error.userMessage(),
+                                    error.toolCalls());
+                            payload = new ErrorPayload(error.userMessage(), MessageDto.from(saved).toolCalls());
+                        } catch (RuntimeException e) {
+                            log.error("Tool-Aufrufe der fehlgeschlagenen Anfrage in Konversation {} konnten nicht "
+                                    + "gespeichert werden: {}", conversationId, error.toolCalls(), e);
+                        }
+                    }
+                    terminate(stream, error.sseName(), payload);
                 }
                 default -> {
                     String data = json.writeValueAsString(SsePayloads.of(event));

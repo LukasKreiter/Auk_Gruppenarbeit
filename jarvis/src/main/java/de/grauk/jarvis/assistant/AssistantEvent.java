@@ -38,8 +38,19 @@ public sealed interface AssistantEvent {
         public String sseName() { return "done"; }
     }
 
-    /** Anfrage abgebrochen; {@code userMessage} ist für den Nutzer formuliert. */
-    record Error(String userMessage) implements AssistantEvent {
+    /**
+     * Anfrage abgebrochen; {@code userMessage} ist für den Nutzer formuliert. {@code toolCalls}: Tools, die vor dem
+     * Fehler schon gelaufen sind (Seiteneffekte wie Timer oder gestartete Programme dürfen nicht verschwinden).
+     */
+    record Error(String userMessage, List<ToolCallRecord> toolCalls) implements AssistantEvent {
+        public Error {
+            toolCalls = List.copyOf(toolCalls);
+        }
+
+        public Error(String userMessage) {
+            this(userMessage, List.of());
+        }
+
         public String sseName() { return "error"; }
     }
 }

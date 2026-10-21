@@ -74,10 +74,22 @@ public class DocumentIngestionService {
             doc.markFailed(readableMessage(e) + (leftover
                     ? " Beim Aufräumen sind Fehler aufgetreten, Reste im Vektorspeicher können zurückbleiben." : ""));
         }
-        return repository.save(doc);
+        try {
+            return repository.save(doc);
+        } catch (RuntimeException e) {
+            // Zeile bliebe PENDING, die Chunks aber durchsuchbar: zurückrollen (KnowledgeStartupCheck fängt Abstürze ab)
+            if (doc.getStatus() == KnowledgeDocument.Status.INDEXED) {
+                removeChunks(doc.getId(), e);
+            }
+            throw e;
+        }
     }
 
-    /** Entfernt alle Chunks des Dokuments und die DB-Zeile. */
+    /**
+     * Entfernt alle Chunks des Dokuments und die DB-Zeile. Reihenfolge bewusst Vektoren zuerst: scheitert ein
+     * Schritt, bleibt die Zeile sichtbar und das Löschen lässt sich wiederholen; umgekehrt blieben unsichtbare,
+     * aber durchsuchbare Chunks zurück.
+     */
     public void delete(long documentId) {
         vectorStore.delete(documentFilter(documentId));
         vectorStoreConfig.persist();
@@ -138,7 +150,7 @@ public class DocumentIngestionService {
             metadata.put("filename", filename);
             tagged.add(new Document(page.getText(), metadata));
         }
-        return tagged.isEmpty() ? tagged : new TokenTextSplitter().apply(tagged);
+        return tagged.isEmpty() ? tagged : TokenTextSplitter.builder().build().apply(tagged);
     }
 
     /** Aufräumen nach Fehlschlag; wirft nicht, hängt einen Fehler als suppressed an; true = Reste möglich. */

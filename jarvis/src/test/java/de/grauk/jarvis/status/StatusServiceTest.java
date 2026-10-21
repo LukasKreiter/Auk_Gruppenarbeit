@@ -73,6 +73,9 @@ class StatusServiceTest {
         assertThat(r.voiceModels()).isEmpty();
         assertThat(r.gpu()).isNull();
         assertThat(r.cpuLoad()).isNegative();
+        assertThat(r.usedMemoryBytes()).isNegative();
+        assertThat(r.totalMemoryBytes()).isNegative();
+        assertThat(r.metricsSource()).isEqualTo("unbekannt");
     }
 
     @Test

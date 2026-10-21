@@ -1,1 +1,11 @@
 .idea/
+
+# Laufzeitdaten (H2-Datenbank, VectorStore) – lokal, nicht versionieren
+data/
+
+# Python
+__pycache__/
+*.pyc
+
+# alte Projekt-Snapshots
+jarvis.zip

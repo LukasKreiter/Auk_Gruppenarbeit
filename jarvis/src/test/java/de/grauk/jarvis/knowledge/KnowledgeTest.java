@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -147,6 +148,32 @@ class KnowledgeTest {
         KnowledgeDocument doc = documentRepository.findById(id).orElseThrow();
         assertThat(doc.getStatus()).isEqualTo(KnowledgeDocument.Status.FAILED);
         assertThat(doc.getStatusMessage()).contains("Neustart");
+    }
+
+    @Test
+    void startupRemovesChunksOfInterruptedDocuments() {
+        Long id = documentRepository.save(new KnowledgeDocument("hängt.txt")).getId();
+        vectorStore.add(List.of(new Document("alpha halb indexiert",
+                Map.of("type", "document", "documentId", String.valueOf(id)))));
+        vectorStoreConfig.persist();
+
+        startupCheck.onReady();
+
+        assertThat(all(vectorStore)).isEmpty();
+    }
+
+    @Test
+    void startupRemovesVectorsWithoutDatabaseRowButKeepsValidOnes() {
+        MemoryFact kept = facts.remember("Alpha ist mein Lieblingsbuchstabe", null);
+        vectorStore.add(List.of(
+                new Document("alpha verwaister chunk", Map.of("type", "document", "documentId", "999999")),
+                new Document("fact-999999", "alpha verwaister fakt", Map.of("type", "fact", "factId", "999999"))));
+        vectorStoreConfig.persist();
+
+        startupCheck.onReady();
+
+        assertThat(all(vectorStore)).extracting(d -> d.getMetadata().get("factId"))
+                .containsExactly(String.valueOf(kept.getId()));
     }
 
     @Test

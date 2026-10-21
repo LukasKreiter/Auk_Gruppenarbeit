@@ -24,8 +24,9 @@ public class SystemTools {
     public String getSystemStatus() {
         SystemSnapshot s = metricsService.snapshot();
         String cpu = s.cpuLoad() < 0 || Double.isNaN(s.cpuLoad()) ? "unbekannt" : String.format(Locale.GERMAN, "%.0f %%", s.cpuLoad() * 100);
-        String ram = String.format(Locale.GERMAN, "%.1f von %.1f GB belegt", s.usedMemoryBytes() / GIB,
-                s.totalMemoryBytes() / GIB);
+        String ram = s.totalMemoryBytes() <= 0 || s.usedMemoryBytes() < 0 ? "unbekannt"
+                : String.format(Locale.GERMAN, "%.1f von %.1f GB belegt", s.usedMemoryBytes() / GIB,
+                        s.totalMemoryBytes() / GIB);
         String gpu = s.gpuMemoryUsedBytes() == null || s.gpuMemoryTotalBytes() == null ? "unbekannt"
                 : String.format(Locale.GERMAN, "%.1f von %.1f GB belegt", s.gpuMemoryUsedBytes() / GIB,
                         s.gpuMemoryTotalBytes() / GIB);

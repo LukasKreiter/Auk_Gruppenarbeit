@@ -42,6 +42,8 @@ public class StatusService {
      * @param voiceModels  vom voice-service gemeldete Modelle
      * @param gpu          {@code null}, wenn der voice-service keine GPU meldet
      * @param cpuLoad      0..1, negativ = unbekannt
+     * @param usedMemoryBytes  negativ = unbekannt (Messung fehlgeschlagen)
+     * @param totalMemoryBytes negativ = unbekannt (Messung fehlgeschlagen)
      * @param metricsSource Quelle von CPU/RAM: {@code oshi}, {@code jmx} oder {@code unbekannt}
      */
     public record StatusReport(Instant checkedAt, ChatProvider activeProvider, List<Light> lights,
@@ -102,11 +104,16 @@ public class StatusService {
                     ? new Gpu(v.gpuName(), v.gpuMemoryUsedBytes(), v.gpuMemoryTotalBytes(), v.gpuUtilization()) : null;
         }
 
-        SystemSnapshot s = guard("metrics", metrics::snapshot, new SystemSnapshot(-1, 0, 0, null, null));
+        // Fallback mit -1 statt 0: "0 / 0 MB" sähe wie ein echter Messwert aus
+        SystemSnapshot s = guard("metrics", metrics::snapshot, null);
+        boolean metricsFailed = s == null;
+        if (metricsFailed) {
+            s = new SystemSnapshot(-1, -1, -1, null, null);
+        }
         List<String> ollamaModels = o.getStatus() == Status.UP
                 ? guard("ollama-models", () -> registry.models(ChatProvider.OLLAMA), List.<String>of()) : List.of();
         Latencies latencies = guard("latencies", metrics::lastLatencies, new Latencies(null, null, null));
-        String source = guard("metrics-source", metrics::source, "unbekannt");
+        String source = metricsFailed ? "unbekannt" : guard("metrics-source", metrics::source, "unbekannt");
         return new StatusReport(Instant.now(), active, lights, ollamaModels, voiceModels, gpu,
                 s.cpuLoad(), s.usedMemoryBytes(), s.totalMemoryBytes(), latencies, source);
     }

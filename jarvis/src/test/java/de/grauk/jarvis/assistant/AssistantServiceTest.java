@@ -1,7 +1,6 @@
 package de.grauk.jarvis.assistant;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -17,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -75,9 +75,9 @@ class AssistantServiceTest {
     private final SettingsService settings = mock(SettingsService.class);
     private final ToolRegistry toolRegistry = mock(ToolRegistry.class);
     private final VectorStore vectorStore = mock(VectorStore.class);
-    private final MessageChatMemoryAdvisor memoryAdvisor = MessageChatMemoryAdvisor.builder(
-            MessageWindowChatMemory.builder().chatMemoryRepository(new InMemoryChatMemoryRepository())
-                    .maxMessages(20).build()).build();
+    private final ChatMemory chatMemory = MessageWindowChatMemory.builder()
+            .chatMemoryRepository(new InMemoryChatMemoryRepository()).maxMessages(20).build();
+    private final MessageChatMemoryAdvisor memoryAdvisor = MessageChatMemoryAdvisor.builder(chatMemory).build();
 
     @BeforeEach
     void setUp() {
@@ -98,7 +98,7 @@ class AssistantServiceTest {
         ObjectProvider<OllamaApi> api = mock(ObjectProvider.class);
         ChatProviderRegistry registry = new ChatProviderRegistry(new ChatClients(clients), settings,
                 new AssistantProperties(null, null, null), api, anthropicKey);
-        return new AssistantService(registry, settings, toolRegistry);
+        return new AssistantService(registry, settings, toolRegistry, chatMemory);
     }
 
     private static List<AssistantEvent> collect(Flux<AssistantEvent> flux) {
@@ -224,6 +224,74 @@ class AssistantServiceTest {
             assertThat(done.fullText()).isEqualTo("Timer läuft");
             assertThat(done.toolCalls()).containsExactly(new ToolCallRecord("timer", "{\"minutes\":5}", "ok"));
         });
+    }
+
+    @Test
+    void failedRequestLeavesNoDanglingQuestionInChatMemory() {
+        FakeChatModel good = new FakeChatModel("Antwort");
+        ChatModel broken = new FakeChatModel() {
+            @Override
+            public Flux<ChatResponse> stream(Prompt prompt) {
+                return Flux.error(new IllegalStateException("weg"));
+            }
+        };
+        collect(service(good, null, "").stream(3, "Frage"));
+        collect(service(broken, null, "").stream(3, "Nochmal"));
+        collect(service(broken, null, "").stream(3, "Frage"));
+        collect(service(new FakeChatModel(""), null, "").stream(3, "Leer"));
+
+        // die erste, beantwortete gleichlautende Frage bleibt; die unbeantworteten verschwinden
+        assertThat(chatMemory.get("3")).extracting(Message::getText).containsExactly("Frage", "Antwort");
+    }
+
+    @Test
+    void cleanupNeverRemovesAnAnsweredTurn() {
+        AssistantService service = service(new FakeChatModel("Antwort"), null, "");
+        collect(service.stream(4, "Frage"));
+
+        service.forgetUnansweredTurn(4, "Frage");
+
+        assertThat(chatMemory.get("4")).extracting(Message::getText).containsExactly("Frage", "Antwort");
+    }
+
+    @Test
+    void toolCallsSurviveAFailureAfterTheToolRan() {
+        ToolCallback tool = new ToolCallback() {
+            @Override
+            public ToolDefinition getToolDefinition() {
+                return ToolDefinition.builder().name("timer").description("Timer").inputSchema("{}").build();
+            }
+
+            @Override
+            public String call(String toolInput) {
+                return call(toolInput, null);
+            }
+
+            @Override
+            public String call(String toolInput, ToolContext toolContext) {
+                ((ToolInvocationListener) toolContext.getContext().get(ToolInvocationListener.CONTEXT_KEY))
+                        .onToolCompleted("timer", toolInput, "ok");
+                return "ok";
+            }
+        };
+        when(toolRegistry.enabledCallbacks()).thenReturn(List.of(tool));
+        FakeChatModel model = new FakeChatModel() {
+            @Override
+            public Flux<ChatResponse> stream(Prompt prompt) {
+                if (prompt.getInstructions().getLast() instanceof ToolResponseMessage) {
+                    return Flux.error(new IllegalStateException("Server weg"));
+                }
+                AssistantMessage call = AssistantMessage.builder().content("")
+                        .toolCalls(List.of(new AssistantMessage.ToolCall("1", "function", "timer", "{}")))
+                        .build();
+                return Flux.just(new ChatResponse(List.of(new Generation(call))));
+            }
+        };
+
+        List<AssistantEvent> events = collect(service(model, null, "").stream(1, "Timer"));
+
+        assertThat(events.getLast()).isInstanceOfSatisfying(AssistantEvent.Error.class,
+                error -> assertThat(error.toolCalls()).containsExactly(new ToolCallRecord("timer", "{}", "ok")));
     }
 
     @Test

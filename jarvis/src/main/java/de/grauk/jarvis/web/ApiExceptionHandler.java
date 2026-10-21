@@ -8,6 +8,7 @@ import de.grauk.jarvis.assistant.ProviderUnavailableException;
 import de.grauk.jarvis.conversation.ConversationNotFoundException;
 import de.grauk.jarvis.knowledge.KnowledgeException;
 import de.grauk.jarvis.tools.ConfirmationNotFoundException;
+import de.grauk.jarvis.voice.VoiceException;
 
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -44,8 +45,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<Object> badRequest(IllegalArgumentException e, WebRequest request) {
-        // Die Services werfen bewusst Validierungstexte; die Meldung geht an den Client, der Stacktrace nur ins Debug-Log
-        log.debug("Ungültige Anfrage bei {}", request.getDescription(false), e);
+        // Die Services werfen bewusst Validierungstexte; die Meldung geht an den Client. Der Werfer steht im WARN-Log,
+        // damit eine IAE aus einer Bibliothek oder einem Programmierfehler nicht unsichtbar bleibt; Stacktrace auf debug.
+        StackTraceElement[] trace = e.getStackTrace();
+        log.warn("Ungültige Anfrage bei {}: {} (geworfen in {})", request.getDescription(false), e.getMessage(),
+                trace.length > 0 ? trace[0] : "?");
+        log.debug("Stacktrace der ungültigen Anfrage", e);
         return problem(HttpStatus.BAD_REQUEST, e.getMessage());
     }
 
@@ -69,6 +74,13 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     ResponseEntity<Object> knowledge(KnowledgeException e, WebRequest request) {
         log.warn("Wissens-Fehler: {}", e.getMessage());
         return problem(HttpStatus.BAD_GATEWAY, e.getMessage());
+    }
+
+    @ExceptionHandler(VoiceException.class)
+    ResponseEntity<Object> voice(VoiceException e, WebRequest request) {
+        // Ursache (z. B. Piper-Fehlerausgabe) nur ins Log, der Client bekommt die lesbare Meldung
+        log.warn("Sprachausgabe fehlgeschlagen: {}", e.getMessage(), e.getCause());
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, e.getMessage());
     }
 
     /**

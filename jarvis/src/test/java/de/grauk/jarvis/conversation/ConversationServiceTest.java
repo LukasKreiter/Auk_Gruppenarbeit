@@ -9,6 +9,7 @@ import de.grauk.jarvis.assistant.AssistantEvent;
 import de.grauk.jarvis.assistant.ChatProvider;
 import de.grauk.jarvis.assistant.ToolCallRecord;
 import de.grauk.jarvis.conversation.ConversationService.MessageView;
+import de.grauk.jarvis.tools.ToolCallStatus;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -169,6 +170,21 @@ class ConversationServiceTest {
         messages.flush();
 
         assertThat(messages.findById(saved.getId())).get().extracting(Message::getContent).isEqualTo(longText);
+    }
+
+    @Test
+    void failedAnswerKeepsToolCallsVisibleInHistory() {
+        Conversation c = service.create(null);
+        service.saveUserMessage(c.getId(), "Timer 5 Minuten", "de", null);
+
+        MessageView saved = service.saveFailedAnswer(c.getId(), "LLM-Server nicht erreichbar",
+                List.of(new ToolCallRecord("setTimer", "{\"minutes\":5}", "Timer gestellt"),
+                        new ToolCallRecord("openApplication", "{}", "Fehler bei Tool", ToolCallStatus.FAILED)));
+
+        assertThat(saved.message().getRole()).isEqualTo(Role.ASSISTANT);
+        assertThat(saved.message().getContent()).contains("LLM-Server nicht erreichbar");
+        assertThat(service.messages(c.getId()).getLast().toolCalls()).extracting(ToolCall::getStatus)
+                .containsExactly(ToolCallStatus.OK, ToolCallStatus.FAILED);
     }
 
     @Test

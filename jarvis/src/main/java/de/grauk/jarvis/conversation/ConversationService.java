@@ -154,6 +154,19 @@ public class ConversationService {
         return new MessageView(saved, savedCalls);
     }
 
+    /**
+     * Protokolliert Tools, die vor einem Abbruch schon gelaufen sind: als Assistenten-Nachricht mit der Fehlermeldung,
+     * damit die Seiteneffekte (Timer, gestartete Programme, gemerkte Fakten) im Verlauf sichtbar bleiben.
+     */
+    public MessageView saveFailedAnswer(long conversationId, String errorMessage, List<ToolCallRecord> calls) {
+        Conversation conversation = get(conversationId);
+        Message saved = messages.save(new Message(conversationId, Role.ASSISTANT, "⚠ " + errorMessage));
+        List<ToolCall> savedCalls = toolCalls.saveAll(calls.stream()
+                .map(record -> toEntity(saved.getId(), record)).toList());
+        conversation.touch();
+        return new MessageView(saved, savedCalls);
+    }
+
     /** Trägt die TTS-Dauer nach, sobald die Sprachausgabe fertig ist. */
     public void recordTtsMillis(long messageId, long ttsMs) {
         messages.findById(messageId).ifPresentOrElse(message -> message.setTtsMs(ttsMs),
@@ -184,7 +197,7 @@ public class ConversationService {
     }
 
     private static ToolCall toEntity(long messageId, ToolCallRecord record) {
-        return new ToolCall(messageId, record.toolName(), record.argumentsJson(), record.result());
+        return new ToolCall(messageId, record.toolName(), record.argumentsJson(), record.result(), record.status());
     }
 
     private static String validTitle(String title) {

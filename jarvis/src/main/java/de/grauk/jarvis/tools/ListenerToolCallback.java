@@ -44,22 +44,29 @@ class ListenerToolCallback implements ToolCallback {
                 && toolContext.getContext().get(ToolInvocationListener.CONTEXT_KEY) instanceof ToolInvocationListener l
                 ? l : null;
         String result;
+        ToolCallStatus status = ToolCallStatus.OK;
         try {
             if (listener != null) {
                 notifyCalled(listener, name, toolInput);
             }
-            result = requiresConfirmation
-                    ? gate.execute(name, toolInput, listener, () -> delegate.call(toolInput, toolContext))
-                    : delegate.call(toolInput, toolContext);
+            if (requiresConfirmation) {
+                ConfirmationGate.Outcome outcome = gate.execute(name, toolInput, listener,
+                        () -> delegate.call(toolInput, toolContext));
+                result = outcome.text();
+                status = outcome.executed() ? ToolCallStatus.OK : ToolCallStatus.NOT_EXECUTED;
+            } else {
+                result = delegate.call(toolInput, toolContext);
+            }
         } catch (RuntimeException e) {
             log.warn("Tool {} fehlgeschlagen", name, e);
             String message = e.getMessage() == null || e.getMessage().isBlank()
                     ? e.getClass().getSimpleName() : e.getMessage();
             result = "Fehler bei Tool '" + name + "': " + message;
+            status = ToolCallStatus.FAILED;
         }
         if (listener != null) {
             try {
-                listener.onToolCompleted(name, toolInput, result);
+                listener.onToolCompleted(name, toolInput, result, status);
             } catch (RuntimeException e) {
                 log.warn("Listener.onToolCompleted für Tool {} fehlgeschlagen", name, e);
             }

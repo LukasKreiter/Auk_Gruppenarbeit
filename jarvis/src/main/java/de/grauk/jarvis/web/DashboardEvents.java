@@ -2,6 +2,9 @@ package de.grauk.jarvis.web;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -26,6 +29,7 @@ import tools.jackson.databind.json.JsonMapper;
  * Server-Ereignisse (derzeit nur ein abgelaufener Timer) gehen an alle. Es sind höchstens {@value #DEFAULT_MAX_EMITTERS}
  * Clients gleichzeitig angemeldet (der älteste wird geschlossen, der Browser verbindet sich selbst neu). Alle 30 s geht ein
  * SSE-Kommentar an alle Clients; dabei werden tote Emitter entfernt, auch wenn kein Ereignis anliegt.
+ * Ein Timer, der abläuft, während kein Tab offen ist, wird vorgemerkt und an den nächsten Client nachgeliefert.
  */
 @Component
 public class DashboardEvents {
@@ -34,6 +38,7 @@ public class DashboardEvents {
 
     static final int DEFAULT_MAX_EMITTERS = 20;
     static final long HEARTBEAT_SECONDS = 30;
+    static final int MAX_PENDING_TIMERS = 20;
 
     /** Nutzdaten des SSE-Events {@code timer}. */
     public record TimerPayload(UUID timerId, String label, int minutes, Instant expiredAt) {}
@@ -42,6 +47,8 @@ public class DashboardEvents {
     private final Set<SseEmitter> emitters = new CopyOnWriteArraySet<>();
     private final JsonMapper json;
     private final int maxEmitters;
+    /** Abgelaufene Timer, die noch keinen Client erreicht haben (älteste zuerst). */
+    private final Deque<TimerPayload> pendingTimers = new ArrayDeque<>();
     private final ScheduledThreadPoolExecutor scheduler = new ScheduledThreadPoolExecutor(1, runnable -> {
         Thread thread = new Thread(runnable, "dashboard-sse-heartbeat");
         thread.setDaemon(true);
@@ -79,8 +86,46 @@ public class DashboardEvents {
         } catch (IOException | IllegalStateException e) {
             emitters.remove(emitter);
             log.debug("Dashboard-Client sofort getrennt: {}", e.toString());
+            return emitter;
         }
+        deliverPendingTimers(emitter);
         return emitter;
+    }
+
+    private void deliverPendingTimers(SseEmitter emitter) {
+        List<TimerPayload> pending;
+        synchronized (pendingTimers) {
+            pending = List.copyOf(pendingTimers);
+            pendingTimers.clear();
+        }
+        for (int i = 0; i < pending.size(); i++) {
+            try {
+                emitter.send(SseEmitter.event().name("timer").data(json.writeValueAsString(pending.get(i))));
+                log.info("Timer '{}' an neu verbundenen Dashboard-Client nachgeliefert", pending.get(i).label());
+            } catch (IOException | IllegalStateException e) {
+                emitters.remove(emitter);
+                pending.subList(i, pending.size()).forEach(this::remember);
+                log.debug("Dashboard-Client beim Nachliefern getrennt: {}", e.toString());
+                return;
+            }
+        }
+    }
+
+    private void remember(TimerPayload payload) {
+        synchronized (pendingTimers) {
+            if (pendingTimers.size() >= MAX_PENDING_TIMERS) {
+                TimerPayload dropped = pendingTimers.removeFirst();
+                log.warn("Zu viele nicht zugestellte Timer, verwerfe '{}' (abgelaufen {})", dropped.label(),
+                        dropped.expiredAt());
+            }
+            pendingTimers.addLast(payload);
+        }
+    }
+
+    int pendingTimerCount() {
+        synchronized (pendingTimers) {
+            return pendingTimers.size();
+        }
     }
 
     private void evictOldest() {
@@ -104,9 +149,12 @@ public class DashboardEvents {
     @EventListener
     public void onTimerExpired(TimerExpiredEvent event) {
         log.info("Timer '{}' ({} min) abgelaufen, {} Dashboard-Clients", event.label(), event.minutes(), emitters.size());
-        int delivered = broadcast("timer", new TimerPayload(event.timerId(), event.label(), event.minutes(), event.expiredAt()));
+        TimerPayload payload = new TimerPayload(event.timerId(), event.label(), event.minutes(), event.expiredAt());
+        int delivered = broadcast("timer", payload);
         if (delivered == 0) {
-            log.warn("Timer '{}' abgelaufen, aber kein Dashboard-Client erreichbar", event.label());
+            log.warn("Timer '{}' abgelaufen, aber kein Dashboard-Client erreichbar – wird beim nächsten Öffnen "
+                    + "nachgeliefert", event.label());
+            remember(payload);
         }
     }
 

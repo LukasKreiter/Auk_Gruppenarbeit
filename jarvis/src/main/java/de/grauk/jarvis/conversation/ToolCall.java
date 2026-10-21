@@ -2,7 +2,11 @@ package de.grauk.jarvis.conversation;
 
 import java.time.LocalDateTime;
 
+import de.grauk.jarvis.tools.ToolCallStatus;
+
 import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -32,6 +36,10 @@ public class ToolCall {
     @Lob
     private String result;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private ToolCallStatus status = ToolCallStatus.OK;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -39,10 +47,15 @@ public class ToolCall {
     }
 
     public ToolCall(long messageId, String toolName, String arguments, String result) {
+        this(messageId, toolName, arguments, result, ToolCallStatus.OK);
+    }
+
+    public ToolCall(long messageId, String toolName, String arguments, String result, ToolCallStatus status) {
         this.messageId = messageId;
         this.toolName = toolName;
         this.arguments = arguments;
         this.result = result;
+        this.status = status == null ? ToolCallStatus.OK : status;
     }
 
     @PrePersist
@@ -57,5 +70,6 @@ public class ToolCall {
     public String getToolName() { return toolName; }
     public String getArguments() { return arguments; }
     public String getResult() { return result; }
+    public ToolCallStatus getStatus() { return status; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

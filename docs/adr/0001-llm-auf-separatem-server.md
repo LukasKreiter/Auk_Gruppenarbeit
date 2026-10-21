@@ -14,11 +14,12 @@ dokumentiert (Modelle werden ausgelagert → Latenzspitzen).
 Ollama **und** der `voice-service` laufen auf einem separaten GPU-Server (Aufbau: Kreiter).
 `jarvis` (Spring Boot) und der Browser bleiben auf dem Arbeitsplatz-PC.
 
-- `jarvis` bindet weiterhin nur an `127.0.0.1:8080` – das Dashboard ist nicht aus dem LAN erreichbar.
+- `jarvis` bindet weiterhin nur an `127.0.0.1:9090` – das Dashboard ist nicht aus dem LAN erreichbar.
 - Ollama und `voice-service` hören auf dem Server im LAN (`0.0.0.0:11434`, `0.0.0.0:8090`).
 - Absicherung, da Ollama keine Authentifizierung kennt:
   - Server-Firewall erlaubt 11434 und 8090 **nur** von der IP des Jarvis-PCs.
-  - `voice-service` prüft zusätzlich den Header `X-Jarvis-Token` gegen eine Env-Variable.
+  - `voice-service` prüft zusätzlich den Header `X-Jarvis-Token` gegen die Env-Variable `JARVIS_VOICE_TOKEN`
+    (ohne Token bindet er standardmäßig nur an `127.0.0.1`; Host/Port über `JARVIS_VOICE_HOST`/`JARVIS_VOICE_PORT`).
 - Jarvis-Seite konfiguriert nur URLs und Token: `spring.ai.ollama.base-url`, `jarvis.voice.base-url`,
   `jarvis.voice.token`.
 

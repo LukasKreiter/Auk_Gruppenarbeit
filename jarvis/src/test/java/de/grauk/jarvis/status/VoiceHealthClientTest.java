@@ -128,7 +128,7 @@ class VoiceHealthClientTest {
         assertThat(h.gpuUtilization()).isEqualTo(0.5);
         assertThat(h.gpuMemoryUsedBytes()).isEqualTo(10L);
 
-        assertThat(VoiceHealthClient.parse("kein json", Instant.EPOCH).up()).isTrue();
+        assertThat(VoiceHealthClient.parse("kein json", Instant.EPOCH).up()).isFalse();
         assertThat(VoiceHealthClient.parse("", Instant.EPOCH).gpuName()).isNull();
     }
 
@@ -163,15 +163,15 @@ class VoiceHealthClientTest {
     }
 
     @Test
-    void htmlBodyCountsAsUpButUnreadable() {
+    void htmlBodyCountsAsDownBecauseItIsNoVoiceService() {
         VoiceHealthClient client = client("", new MutableClock());
         server.expect(requestTo("http://voice:8090/health"))
                 .andRespond(withSuccess("<html><body>Login</body></html>", MediaType.TEXT_HTML));
 
         VoiceHealth h = client.current();
 
-        assertThat(h.up()).isTrue();
-        assertThat(h.message()).isEqualTo("ok (Antwort nicht lesbar)");
+        assertThat(h.up()).isFalse();
+        assertThat(h.message()).startsWith("Antwort nicht lesbar");
         assertThat(h.models()).isEmpty();
     }
 

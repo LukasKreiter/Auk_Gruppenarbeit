@@ -13,6 +13,7 @@ import de.grauk.jarvis.conversation.ToolCall;
 import de.grauk.jarvis.knowledge.KnowledgeDocument;
 import de.grauk.jarvis.knowledge.MemoryFact;
 import de.grauk.jarvis.settings.AssistantSettings;
+import de.grauk.jarvis.tools.ToolCallStatus;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -38,9 +39,11 @@ public final class Dtos {
         }
     }
 
-    public record ToolCallDto(Long id, String toolName, String arguments, String result, LocalDateTime createdAt) {
+    public record ToolCallDto(Long id, String toolName, String arguments, String result, ToolCallStatus status,
+                              LocalDateTime createdAt) {
         public static ToolCallDto from(ToolCall t) {
-            return new ToolCallDto(t.getId(), t.getToolName(), t.getArguments(), t.getResult(), t.getCreatedAt());
+            return new ToolCallDto(t.getId(), t.getToolName(), t.getArguments(), t.getResult(), t.getStatus(),
+                    t.getCreatedAt());
         }
     }
 

@@ -26,7 +26,10 @@ public class MetricsService {
     private static final Logger log = LoggerFactory.getLogger(MetricsService.class);
     private static final long CPU_SAMPLE_NANOS = Duration.ofSeconds(1).toNanos();
 
-    /** cpuLoad 0..1 oder negativ, wenn unbekannt; gpu* null, wenn der voice-service keine GPU-Werte liefert. */
+    /**
+     * cpuLoad 0..1 oder negativ, wenn unbekannt; Speicherwerte negativ, wenn unbekannt; gpu* null, wenn der
+     * voice-service keine GPU-Werte liefert.
+     */
     public record SystemSnapshot(double cpuLoad, long usedMemoryBytes, long totalMemoryBytes,
                                  Long gpuMemoryUsedBytes, Long gpuMemoryTotalBytes) {}
 

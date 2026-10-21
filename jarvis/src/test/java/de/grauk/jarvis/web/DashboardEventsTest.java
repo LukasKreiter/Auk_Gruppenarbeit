@@ -68,4 +68,26 @@ class DashboardEventsTest {
         assertThatCode(() -> events.onTimerExpired(new TimerExpiredEvent(UUID.randomUUID(), "Tee", 3, Instant.now())))
                 .doesNotThrowAnyException();
     }
+
+    @Test
+    void timerWithoutClientIsDeliveredToNextSubscriber() {
+        events = new DashboardEvents(JsonMapper.builder().build(), 20);
+
+        events.onTimerExpired(new TimerExpiredEvent(UUID.randomUUID(), "Tee", 3, Instant.now()));
+        assertThat(events.pendingTimerCount()).isEqualTo(1);
+
+        events.subscribe();
+        assertThat(events.pendingTimerCount()).isZero();
+    }
+
+    @Test
+    void pendingTimersAreBounded() {
+        events = new DashboardEvents(JsonMapper.builder().build(), 20);
+
+        for (int i = 0; i < DashboardEvents.MAX_PENDING_TIMERS + 5; i++) {
+            events.onTimerExpired(new TimerExpiredEvent(UUID.randomUUID(), "T" + i, 1, Instant.now()));
+        }
+
+        assertThat(events.pendingTimerCount()).isEqualTo(DashboardEvents.MAX_PENDING_TIMERS);
+    }
 }

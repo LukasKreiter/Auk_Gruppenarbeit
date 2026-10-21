@@ -48,6 +48,7 @@ class ToolRegistryTest {
 
     static class RecordingListener implements ToolInvocationListener {
         final List<String> events = new ArrayList<>();
+        final List<ToolCallStatus> statuses = new ArrayList<>();
         final CompletableFuture<UUID> confirmation = new CompletableFuture<>();
 
         @Override
@@ -62,8 +63,9 @@ class ToolRegistryTest {
         }
 
         @Override
-        public void onToolCompleted(String toolName, String argumentsJson, String result) {
+        public void onToolCompleted(String toolName, String argumentsJson, String result, ToolCallStatus status) {
             events.add("completed:" + toolName + "=" + result);
+            statuses.add(status);
         }
     }
 
@@ -190,6 +192,7 @@ class ToolRegistryTest {
         assertThat(listener.events).hasSize(2);
         assertThat(listener.events.get(0)).isEqualTo("called:safe");
         assertThat(listener.events.get(1)).startsWith("completed:safe=").contains("safe-ok");
+        assertThat(listener.statuses).containsExactly(ToolCallStatus.OK);
     }
 
     @Test
@@ -200,6 +203,7 @@ class ToolRegistryTest {
 
         assertThat(result).contains("boom");
         assertThat(listener.events).last().asString().startsWith("completed:broken=").contains("boom");
+        assertThat(listener.statuses).containsExactly(ToolCallStatus.FAILED);
     }
 
     @Test
@@ -226,6 +230,7 @@ class ToolRegistryTest {
         assertThat(result.get()).contains("abgelehnt");
         assertThat(tools.dangerousCalls).hasValue(0);
         assertThat(listener.events).last().asString().startsWith("completed:dangerous=");
+        assertThat(listener.statuses).containsExactly(ToolCallStatus.NOT_EXECUTED);
     }
 
     @Test
@@ -238,6 +243,7 @@ class ToolRegistryTest {
 
         assertThat(result).contains("nicht rechtzeitig");
         assertThat(tools.dangerousCalls).hasValue(0);
+        assertThat(listener.statuses).containsExactly(ToolCallStatus.NOT_EXECUTED);
     }
 
     @Test

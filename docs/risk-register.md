@@ -128,7 +128,7 @@ Score = Wahrscheinlichkeit (W) × Auswirkung (A), je Skala 1–5.
 - Maßnahme: Modell-Tags exakt festhalten; Modellliste im README mit Stand-Datum.
 
 **R25 – Mikrofonzugriff.** Browser erlauben `getUserMedia` nur auf `localhost` oder HTTPS.
-- Maßnahme: Dashboard nur über `http://localhost:8080` nutzen (nicht per LAN-IP); verständliche Meldung bei verweigerter Berechtigung.
+- Maßnahme: Dashboard nur über `http://localhost:9090` nutzen (nicht per LAN-IP); verständliche Meldung bei verweigerter Berechtigung.
 
 **R26 – Scope Creep.** Phase 7 und Erweiterungen (Always-on, Smart-Home) können die Kernfunktionen verdrängen.
 - Maßnahme: Phasen 0–6 als verbindlichen Umfang festlegen; Phase 7 nur bei verbleibender Zeit.
