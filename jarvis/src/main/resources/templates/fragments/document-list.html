@@ -1,0 +1,12 @@
+<!-- Platzhalter, bis das Frontend-Team die echten Templates baut. -->
+<div xmlns:th="http://www.thymeleaf.org" th:fragment="list" id="document-list">
+  <p class="error" th:if="${error}" th:text="${error}"></p>
+  <p th:if="${uploaded}" th:text="'Hochgeladen: ' + ${uploaded.filename}"></p>
+  <p th:if="${#lists.isEmpty(documents)}">Keine Dokumente.</p>
+  <ul>
+    <li th:each="d : ${documents}">
+      <span th:text="${d.filename} + ' – ' + ${d.status} + ' (' + ${d.chunks} + ' Chunks)'"></span>
+      <span th:if="${d.statusMessage}" th:text="': ' + ${d.statusMessage}"></span>
+    </li>
+  </ul>
+</div>

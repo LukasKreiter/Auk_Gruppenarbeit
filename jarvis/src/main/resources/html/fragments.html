@@ -1,0 +1,113 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" lang="de">
+<body>
+
+<!-- ============ left rail: Ollama / Voice / Wissensbasis + Laufzeit ============ -->
+<div th:fragment="statusPanelContent">
+  <p class="panel-title">Systemstatus</p>
+  <div class="ring-row">
+    <div class="ring" style="--pct:100">
+      <div class="ring-label">
+        <strong th:text="${status.ollamaOnline} ? '●' : '○'">●</strong>
+        <span>OLLAMA</span>
+      </div>
+    </div>
+    <div class="ring" style="--pct:100">
+      <div class="ring-label">
+        <strong th:text="${status.voiceOnline} ? '●' : '○'">●</strong>
+        <span>VOICE</span>
+      </div>
+    </div>
+    <div class="ring" th:style="'--pct:' + ${status.kbPercent}">
+      <div class="ring-label">
+        <strong th:text="${status.kbPercent} + '%'">41%</strong>
+        <span>WISSEN</span>
+      </div>
+    </div>
+  </div>
+  <div class="uptime-line">
+    <span>Laufzeit</span>
+    <strong th:text="${status.uptime}">0T 12Std 32Min</strong>
+  </div>
+  <div class="uptime-line" style="border-top:none;padding-top:0;">
+    <span>
+      <span class="status-dot" th:classappend="${status.ollamaOnline} ? 'on' : 'off'"></span>
+      <span th:text="${status.activeModel + (status.ollamaOnline ? ' bereit' : ' nicht erreichbar')}">llama3.1:8b bereit</span>
+    </span>
+  </div>
+</div>
+
+<!-- ============ right rail: model / temperature ============ -->
+<div th:fragment="modelPanelContent">
+  <p class="panel-title">Modell</p>
+  <div class="model-ring-wrap">
+    <div class="ring model-ring" th:style="'--pct:' + ${model.temperature * 100}">
+      <div class="ring-label">
+        <strong th:text="${#numbers.formatDecimal(model.temperature, 1, 'NONE', 2, 'POINT')}">0.70</strong>
+        <span>TEMP.</span>
+      </div>
+    </div>
+    <div class="model-meta">
+      <strong th:text="${model.activeModel}">llama3.1:8b</strong>
+      über Ollama · lokal gehostet
+    </div>
+  </div>
+</div>
+
+<!-- ============ right rail: live system stats ============ -->
+<div th:fragment="systemPanelContent">
+  <div class="stat-row"><span>Tokens / Sek.</span><span th:text="${#numbers.formatDecimal(system.tokensPerSecond, 1, 'NONE', 1, 'POINT')}">38.4</span></div>
+  <div class="stat-row"><span>Antwortzeit</span><span th:text="${system.latencyMs} + ' ms'">412 ms</span></div>
+  <div class="ingest-label"><span>CPU</span><span th:text="${system.cpuPct} + '%'">27%</span></div>
+  <div class="bar"><span th:style="'width:' + ${system.cpuPct} + '%'"></span></div>
+  <div class="ingest-label"><span>Speicher</span><span th:text="${system.memPct} + '%'">54%</span></div>
+  <div class="bar"><span th:style="'width:' + ${system.memPct} + '%'"></span></div>
+</div>
+
+<!-- ============ right rail: tool registry toggles ============ -->
+<div th:fragment="toolsPanelContent">
+  <div class="tool-row" th:each="t : ${tools}">
+    <span th:text="${t.label}">Websuche</span>
+    <button type="button" class="tool-toggle" th:classappend="${t.enabled} ? ' enabled' : ''"
+            th:attr="hx-post=@{/fragments/tools/{id}/toggle(id=${t.id})}"
+            hx-target="#tools-panel" hx-swap="innerHTML"></button>
+  </div>
+</div>
+
+<!-- ============ right rail: live log tail ============ -->
+<div th:fragment="logsPanelContent">
+  <div class="line" th:each="l, it : ${logs}" th:classappend="'lvl-' + ${#strings.toLowerCase(l.level)}">
+    <span th:text="${l.time} + ' ' + ${l.level} + '  ' + ${l.message}">14:49:40 INFO  Neue Unterhaltung gestartet</span>
+    <span class="caret" th:if="${it.last}">█</span>
+  </div>
+</div>
+
+<!-- ============ right rail: knowledge-base ingestion progress ============ -->
+<div th:fragment="ingestionPanelContent">
+  <div class="ingest-item">
+    <div class="ingest-label"><span>Dokumente werden verarbeitet</span><span th:text="${ingestion.documentsPct} + '%'">68%</span></div>
+    <div class="bar green"><span th:style="'width:' + ${ingestion.documentsPct} + '%'"></span></div>
+  </div>
+  <div class="ingest-item">
+    <div class="ingest-label"><span>Embeddings werden erstellt</span><span th:text="${ingestion.embeddingsPct} + '%'">34%</span></div>
+    <div class="bar green"><span th:style="'width:' + ${ingestion.embeddingsPct} + '%'"></span></div>
+  </div>
+  <div class="ingest-file" th:text="'→ ' + ${ingestion.currentFile}">→ handbuch_v2.pdf</div>
+</div>
+
+<!-- ============ center: detail panel behind the nav chips ============ -->
+<div th:fragment="detailPanelContent">
+  <h3 th:text="${detail.title}">Letzte Unterhaltungen</h3>
+  <ul>
+    <li th:each="item : ${detail.items}" th:text="${item}">Beispieleintrag</li>
+  </ul>
+</div>
+
+<!-- ============ center: one chat turn appended to the chat log ============ -->
+<div th:fragment="chatTurn">
+  <div class="chat-turn user"><div class="bubble" th:text="${userMessage}">Nutzeranfrage</div></div>
+  <div class="chat-turn assistant"><div class="bubble" th:text="${reply}">Antwort</div></div>
+</div>
+
+</body>
+</html>

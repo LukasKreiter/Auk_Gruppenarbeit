@@ -1,4 +1,3 @@
-
 package de.grauk.jarvis.voice;
 
 import org.springframework.beans.factory.annotation.Value;

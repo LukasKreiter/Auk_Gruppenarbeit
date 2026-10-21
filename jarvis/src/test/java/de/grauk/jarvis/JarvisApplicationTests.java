@@ -1,4 +1,4 @@
-package com.example.jarvis;
+package de.grauk.jarvis;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

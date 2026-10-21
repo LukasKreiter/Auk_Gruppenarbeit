@@ -1,0 +1,17 @@
+<!-- Platzhalter, bis das Frontend-Team die echten Templates baut. -->
+<div xmlns:th="http://www.thymeleaf.org" th:fragment="status" id="status">
+  <p>Geprüft: <span th:text="${status.checkedAt}"></span>, aktiver Provider: <span th:text="${status.activeProvider}"></span></p>
+  <table>
+    <tr><th>Dienst</th><th>Zustand</th><th>Meldung</th></tr>
+    <tr th:each="l : ${status.lights}">
+      <td th:text="${l.name}"></td>
+      <td th:text="${l.state}"></td>
+      <td th:text="${l.message}"></td>
+    </tr>
+  </table>
+  <p>Ollama-Modelle: <span th:text="${status.ollamaModels}"></span></p>
+  <p>Voice-Modelle: <span th:text="${status.voiceModels}"></span></p>
+  <p th:if="${status.gpu != null}" th:text="'GPU: ' + ${status.gpu.name}"></p>
+  <p>CPU: <span th:text="${status.cpuLoad < 0} ? 'unbekannt' : ${#numbers.formatPercent(status.cpuLoad, 1, 0)}"></span>,
+     RAM: <span th:text="${status.usedMemoryBytes / 1048576} + ' / ' + ${status.totalMemoryBytes / 1048576} + ' MB'"></span></p>
+</div>

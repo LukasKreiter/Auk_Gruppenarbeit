@@ -1,0 +1,114 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jarvis – Dashboard</title>
+  <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+</head>
+<body>
+<div class="hud">
+
+  <!-- ================= LEFT RAIL ================= -->
+  <div class="rail rail-left">
+    <div class="brand">
+      <h1>JARVIS</h1>
+      <p>ASSISTENZSYSTEM</p>
+    </div>
+
+    <div class="clock-wrap">
+      <div class="ring clock-ring" id="clock-ring-fill" style="--pct:0">
+        <div class="ring-label"><strong id="clock-time">--:--</strong></div>
+      </div>
+      <div>
+        <div class="clock-date" id="clock-date">&nbsp;</div>
+        <div class="footer-line" style="text-align:left;padding-top:.3rem;">localhost:8080</div>
+      </div>
+    </div>
+
+    <div class="panel" id="status-panel" hx-get="/fragments/status" hx-trigger="every 12s" hx-swap="innerHTML"
+         th:insert="~{fragments :: statusPanelContent}"></div>
+
+    <div class="quick-actions">
+      <a class="btn" href="#">＋ Neue Unterhaltung</a>
+      <a class="btn" href="#">⚙ Einstellungen</a>
+    </div>
+
+    <div class="footer-line">JVS-01 · 90.90.4.30</div>
+  </div>
+
+  <!-- ================= CENTER ================= -->
+  <div class="center">
+    <form class="chat-bar" hx-post="/fragments/chat" hx-target="#chat-log" hx-swap="beforeend" hx-on::after-request="this.reset()">
+      <input type="text" name="message" placeholder="Frag Jarvis etwas …" autocomplete="off" required>
+      <button type="submit">Senden</button>
+    </form>
+
+    <div class="chat-log" id="chat-log">
+      <div class="chat-turn assistant"><div class="bubble">Guten Tag. Wie kann ich helfen?</div></div>
+    </div>
+
+    <div class="orb-wrap">
+      <div class="orb" id="voice-orb">
+        <div class="ring-outline"></div>
+        <div class="ring-outline r2"></div>
+        <div class="sweep"></div>
+        <button type="button" class="core">JARVIS</button>
+      </div>
+      <div class="orb-hint">Klicken oder sprechen zum Starten</div>
+    </div>
+
+    <div class="nav-chips">
+      <button type="button" class="nav-chip active" hx-get="/fragments/detail/conversations" hx-target="#detail-panel" hx-swap="innerHTML">Unterhaltungen</button>
+      <button type="button" class="nav-chip" hx-get="/fragments/detail/knowledge" hx-target="#detail-panel" hx-swap="innerHTML">Wissensbasis</button>
+      <button type="button" class="nav-chip" hx-get="/fragments/detail/logs" hx-target="#detail-panel" hx-swap="innerHTML">Protokolle</button>
+      <button type="button" class="nav-chip" hx-get="/fragments/detail/settings" hx-target="#detail-panel" hx-swap="innerHTML">Einstellungen</button>
+    </div>
+
+    <div class="panel" id="detail-panel" th:insert="~{fragments :: detailPanelContent}"></div>
+  </div>
+
+  <!-- ================= RIGHT RAIL ================= -->
+  <div class="rail rail-right">
+    <div class="panel" id="model-panel" hx-get="/fragments/model" hx-trigger="every 20s" hx-swap="innerHTML"
+         th:insert="~{fragments :: modelPanelContent}"></div>
+
+    <div class="panel">
+      <p class="panel-title">System</p>
+      <div id="system-panel" hx-get="/fragments/system" hx-trigger="load, every 5s" hx-swap="innerHTML"
+           th:insert="~{fragments :: systemPanelContent}"></div>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">Aktive Tools</p>
+      <div id="tools-panel" th:insert="~{fragments :: toolsPanelContent}"></div>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">Live-Protokoll</p>
+      <div class="terminal" id="logs-panel" hx-get="/fragments/logs" hx-trigger="load, every 4s" hx-swap="innerHTML"
+           th:insert="~{fragments :: logsPanelContent}"></div>
+    </div>
+
+    <div class="panel">
+      <p class="panel-title">Wissensbasis-Aktualisierung</p>
+      <div id="ingestion-panel" hx-get="/fragments/ingestion" hx-trigger="load, every 3s" hx-swap="innerHTML"
+           th:insert="~{fragments :: ingestionPanelContent}"></div>
+    </div>
+  </div>
+
+</div>
+
+<script th:src="@{/js/dashboard.js}"></script>
+<script>
+  // Purely visual nav-chip active state; content swap itself is handled by htmx above.
+  document.querySelectorAll('.nav-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.nav-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

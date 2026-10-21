@@ -1,0 +1,11 @@
+<!-- Platzhalter, bis das Frontend-Team die echten Templates baut. -->
+<div xmlns:th="http://www.thymeleaf.org" th:fragment="list" id="conversation-list">
+  <p class="error" th:if="${error}" th:text="${error}"></p>
+  <p th:if="${#lists.isEmpty(conversations)}">Keine Unterhaltungen.</p>
+  <ul>
+    <li th:each="c : ${conversations}">
+      <a th:href="@{/chat/{id}(id=${c.id})}" th:text="${c.title ?: 'Unterhaltung ' + c.id}">Titel</a>
+      <strong th:if="${c.id == activeConversationId}">(aktiv)</strong>
+    </li>
+  </ul>
+</div>

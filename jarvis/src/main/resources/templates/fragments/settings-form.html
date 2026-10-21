@@ -1,0 +1,21 @@
+<!-- Platzhalter, bis das Frontend-Team die echten Templates baut. Nur Anzeige, kein Formular. -->
+<div xmlns:th="http://www.thymeleaf.org" th:fragment="form" id="settings-form">
+  <p class="error" th:if="${error}" th:text="${error}"></p>
+  <p th:if="${saved}">Gespeichert.</p>
+  <table>
+    <tr><th>Provider</th><td th:text="${settings.provider}"></td></tr>
+    <tr><th>Modell</th><td th:text="${settings.model}"></td></tr>
+    <tr><th>Temperatur</th><td th:text="${settings.temperature}"></td></tr>
+    <tr><th>Think-Mode</th><td th:text="${settings.thinkMode}"></td></tr>
+    <tr><th>TTS</th><td th:text="${settings.ttsEnabled}"></td></tr>
+    <tr><th>Stimme DE / EN</th><td th:text="${settings.voiceDe} + ' / ' + ${settings.voiceEn}"></td></tr>
+    <tr><th>Systemprompt</th><td><pre th:text="${settings.systemPrompt}"></pre></td></tr>
+  </table>
+  <h3>Provider</h3>
+  <ul>
+    <li th:each="p : ${providers}">
+      <span th:text="${p}"></span>: <span th:text="${available.get(p)} ? 'verfügbar' : 'nicht verfügbar'"></span>
+      – <span th:text="${models.get(p)}"></span>
+    </li>
+  </ul>
+</div>
