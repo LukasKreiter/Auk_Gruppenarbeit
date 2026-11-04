@@ -82,7 +82,7 @@ class SettingsServiceTest {
     void rejectsTemperatureOutOfRange() {
         assertThatThrownBy(() -> service.update(form(ChatProvider.OLLAMA, "qwen3:8b", 2.5)))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> service.update(form(ChatProvider.ANTHROPIC, "claude-sonnet-5-5", 1.5)))
+        assertThatThrownBy(() -> service.update(form(ChatProvider.ANTHROPIC, "claude-sonnet-5-5", 2.5)))
                 .isInstanceOf(IllegalArgumentException.class);
         verify(repository, never()).save(any());
     }

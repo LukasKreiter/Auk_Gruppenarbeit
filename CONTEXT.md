@@ -27,11 +27,11 @@ die Code-Doku in [`docs/CODE.md`](docs/CODE.md).
 
 | Begriff | Bedeutung | Im Code |
 |---|---|---|
-| **Provider** | Wer das Chat-Modell ausführt: `OLLAMA` (LLM-Server) oder `ANTHROPIC` (Claude, Cloud). Wird pro Anfrage aus den Einstellungen gelesen. | `ChatProvider`, `ChatProviderRegistry` |
+| **Provider** | Wer das Chat-Modell ausführt: `OLLAMA` (LLM-Server) oder `ANTHROPIC` (Claude, Cloud, über die angemeldete Claude-Code-CLI). Wird pro Anfrage aus den Einstellungen gelesen. | `ChatProvider`, `ChatProviderRegistry` |
 | **Chat-Modell** | Das konkrete Modell eines Providers, z. B. `qwen3:8b` oder `claude-sonnet-5-5`. | `assistant_settings.model` |
 | **Embedding-Modell** | Immer `bge-m3` auf Ollama, unabhängig vom Provider (ADR 0003). | `EmbeddingModel` |
 | **Cloud-Modus** | Provider = `ANTHROPIC`. Daten verlassen den Rechner; im Chat als „☁ Cloud“ markiert. Nie automatisch aktiv (ADR 0005). | – |
-| **Thinking-Modus** | Modell „denkt“ vor der Antwort (qwen3 `think`, Claude Extended Thinking). Standard aus. | `assistant_settings.think_mode` |
+| **Thinking-Modus** | Modell „denkt“ vor der Antwort (qwen3 `think`, Claude `--effort high`). Standard aus. | `assistant_settings.think_mode` |
 
 ## Wissen & Gedächtnis
 

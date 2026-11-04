@@ -39,7 +39,7 @@ class StatusServiceTest {
         when(registry.active()).thenReturn(ChatProvider.OLLAMA);
         when(registry.models(ChatProvider.OLLAMA)).thenReturn(List.of("qwen3:8b"));
         when(ollama.health()).thenReturn(Health.up().build());
-        when(claude.health()).thenReturn(Health.unknown().withDetail("message", "kein Key").build());
+        when(claude.health()).thenReturn(Health.unknown().withDetail("message", "CLI fehlt oder nicht angemeldet").build());
         when(voiceIndicator.health()).thenReturn(Health.up().build());
         when(voice.current()).thenReturn(VoiceHealth.down("weg", Instant.EPOCH));
         when(metrics.snapshot()).thenReturn(new SystemSnapshot(0.5, 1, 2, null, null));
@@ -79,17 +79,17 @@ class StatusServiceTest {
     }
 
     @Test
-    void activeAnthropicWithoutKeyIsDown() {
+    void activeAnthropicWithoutCliIsDown() {
         when(registry.active()).thenReturn(ChatProvider.ANTHROPIC);
 
         Light claudeLight = light(service.report(), "claude");
 
         assertThat(claudeLight.state()).isEqualTo(State.DOWN);
-        assertThat(claudeLight.message()).isEqualTo("aktiver Provider nicht verfügbar (kein API-Key)");
+        assertThat(claudeLight.message()).isEqualTo("aktiver Provider nicht verfügbar (CLI fehlt oder nicht angemeldet)");
     }
 
     @Test
-    void inactiveAnthropicWithoutKeyStaysUnknown() {
+    void inactiveAnthropicWithoutCliStaysUnknown() {
         assertThat(light(service.report(), "claude").state()).isEqualTo(State.UNKNOWN);
     }
 

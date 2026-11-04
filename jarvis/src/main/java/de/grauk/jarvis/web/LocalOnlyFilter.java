@@ -6,6 +6,8 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import de.grauk.jarvis.assistant.ClaudeToolBridge;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,7 +26,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *   <li>Host-Header jeder Anfrage muss in {@code jarvis.web.allowed-hosts} stehen (DNS-Rebinding),</li>
  *   <li>POST/PUT/PATCH/DELETE brauchen einen {@code Origin}- oder {@code Referer}-Header (http/https) mit erlaubtem
  *       Host <b>und eigenem Port</b> ({@code request.getLocalPort()}); Ausnahme: Einträge aus
- *       {@code jarvis.web.allowed-origins}. Fehlen beide Header, wird abgelehnt (CSRF),</li>
+ *       {@code jarvis.web.allowed-origins}. Fehlen beide Header, wird abgelehnt (CSRF). Nur der MCP-Endpunkt der
+ *       Claude-CLI darf ohne beide Header kommen: die CLI ist kein Browser, und dort schützt das Bearer-Token,
+ *       das kein Browser automatisch mitschickt,</li>
  *   <li>{@code Sec-Fetch-Site} bei zustandsändernden Requests: {@code cross-site} wird immer abgelehnt,
  *       {@code same-site} nur, wenn die Origin explizit in {@code allowed-origins} steht; {@code same-origin}/{@code none}
  *       sind erlaubt,</li>
@@ -64,6 +68,10 @@ public class LocalOnlyFilter extends OncePerRequestFilter {
             String origin = request.getHeader("Origin");
             String source = origin != null ? origin : request.getHeader("Referer");
             if (source == null) {
+                if (ClaudeToolBridge.MCP_PATH.equals(request.getRequestURI())) {
+                    chain.doFilter(request, response);
+                    return;
+                }
                 reject(request, response, "Origin und Referer fehlen");
                 return;
             }

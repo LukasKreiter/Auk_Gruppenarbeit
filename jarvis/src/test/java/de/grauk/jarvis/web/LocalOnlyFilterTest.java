@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Duration;
 import java.util.List;
 
+import de.grauk.jarvis.assistant.ClaudeToolBridge;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -31,6 +33,43 @@ class LocalOnlyFilterTest {
         request.addHeader("Host", host);
         request.setLocalPort(8080);
         return request;
+    }
+
+    private static MockHttpServletRequest mcpRequest() {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", ClaudeToolBridge.MCP_PATH);
+        request.addHeader("Host", "127.0.0.1:8080");
+        request.setLocalPort(8080);
+        return request;
+    }
+
+    @Test
+    void mcpEndpointNeedsNoOriginBecauseTheCliIsNoBrowser() throws Exception {
+        assertThat(run(mcpRequest()).passedThrough()).isTrue();
+    }
+
+    @Test
+    void mcpEndpointStillRejectsForeignOrigins() throws Exception {
+        MockHttpServletRequest request = mcpRequest();
+        request.addHeader("Origin", "https://evil.example");
+
+        assertThat(run(request).status()).isEqualTo(403);
+    }
+
+    @Test
+    void mcpEndpointStillRejectsForeignHosts() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", ClaudeToolBridge.MCP_PATH);
+        request.addHeader("Host", "evil.example");
+        request.setServerName("evil.example");
+
+        assertThat(run(request).status()).isEqualTo(403);
+    }
+
+    @Test
+    void originExemptionCoversOnlyTheMcpPath() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", ClaudeToolBridge.MCP_PATH + "/x");
+        request.addHeader("Host", "127.0.0.1:8080");
+
+        assertThat(run(request).status()).isEqualTo(403);
     }
 
     @ParameterizedTest

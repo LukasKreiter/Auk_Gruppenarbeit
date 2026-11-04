@@ -52,19 +52,10 @@ class SettingsWebService {
         if (model == null && providerChanged) {
             model = modelForNewProvider(provider);
         }
-        double temperature;
-        if (request.temperature() != null) {
-            temperature = request.temperature();
-        } else if (providerChanged && provider == ChatProvider.ANTHROPIC && existing.getTemperature() > 1.0) {
-            log.info("Temperatur {} auf 1.0 begrenzt (Claude erlaubt höchstens 1.0)", existing.getTemperature());
-            temperature = 1.0;
-        } else {
-            temperature = existing.getTemperature();
-        }
         AssistantSettings changes = new AssistantSettings(provider,
                 model != null ? model : existing.getModel(),
                 request.systemPrompt() != null ? request.systemPrompt() : existing.getSystemPrompt(),
-                temperature,
+                request.temperature() != null ? request.temperature() : existing.getTemperature(),
                 request.thinkMode() != null ? request.thinkMode() : existing.isThinkMode(),
                 voice(request.voiceDe(), existing.getVoiceDe()),
                 voice(request.voiceEn(), existing.getVoiceEn()),

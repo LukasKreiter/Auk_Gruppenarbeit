@@ -5,8 +5,8 @@ Verantwortlich: **Brenner**. Umfasst die Pakete `assistant/`, `knowledge/` und `
 Entscheidungen siehe [`adr/`](adr/).
 
 > Stand: umgesetzt (Phasen 0, 1, 1b, 5, 6 aus dem README), geprüft gegen Spring Boot 4.1.1 /
-> Spring AI 2.0.1. `./mvnw verify` läuft ohne LLM-Server und ohne `ANTHROPIC_API_KEY`
-> (Modelle in Tests gefakt). Noch nicht gegen einen echten Ollama-Server bzw. Claude getestet.
+> Spring AI 2.0.1. `./mvnw verify` läuft ohne LLM-Server und ohne Claude-CLI
+> (Modelle und CLI in Tests gefakt). Noch nicht gegen einen echten Ollama-Server getestet.
 
 ## Überblick
 
@@ -53,10 +53,10 @@ Ablauf pro Anfrage:
 
 1. `SettingsService.current()` lesen → Provider, Modell, System-Prompt, Temperatur, Thinking.
 2. `ChatProviderRegistry.clientFor(provider)` → `ChatClient`, sonst `ProviderUnavailableException` → `Error`.
-3. Provider-spezifische Optionen (`OllamaChatOptions` bzw. `AnthropicChatOptions`) als **Builder** an
+3. Provider-spezifische Optionen (`OllamaChatOptions` bzw. `ClaudeCliChatOptions`) als **Builder** an
    `.options(...)` – in Spring AI 2.0.1 nimmt `ChatClientRequestSpec.options` einen `ChatOptions.Builder`.
    - Ollama: `model`, `temperature`, `enableThinking()` / `disableThinking()`.
-   - Claude: `maxTokens` 4096; mit Thinking `thinkingEnabled(2048)`, `maxTokens` 8192 und keine Temperatur.
+   - Claude: `model`, `thinking(...)` → `--effort high` bzw. `low`; die CLI kennt keine Temperatur.
 4. Prompt: System-Prompt + `MessageChatMemoryAdvisor` (Konversations-ID = `conversationId` als String)
    + `GuardedRagAdvisor` (Schwellwert/Top-K aus `jarvis.knowledge.*`) + `ToolRegistry.enabledCallbacks()`.
    Pro Anfrage kommt ein `ToolInvocationListener` in den ToolContext; er schiebt `ToolCalled` /
@@ -71,9 +71,9 @@ Fehlertexte (`Error.userMessage`):
 | Ursache | Text |
 |---|---|
 | Ollama nicht erreichbar | „LLM-Server nicht erreichbar – in den Einstellungen kann Claude gewählt werden“ |
-| Claude ohne Key | Text der `ProviderUnavailableException` |
+| Claude-CLI fehlt, nicht angemeldet, Limit erreicht, Absturz | Text der `ProviderUnavailableException` |
 | Zeitüberschreitung | „Zeitüberschreitung – … antwortet nicht.“ |
-| HTTP 401/403, 404, 429 | API-Key ungültig / Modell nicht gefunden / Rate-Limit erreicht |
+| HTTP 404, 429 | Modell nicht gefunden / Rate-Limit erreicht |
 
 Persistenz der Nachricht und der Tool-Aufrufe macht **nicht** der `AssistantService`, sondern
 `conversation/` (Hiebler) anhand von `Done`. Die Advisor-Reihenfolge ist Memory → ToolCalling → RAG:
@@ -101,16 +101,29 @@ public record ToolCallRecord(String toolName, String argumentsJson, String resul
 
 ```java
 public ChatClient clientFor(ChatProvider provider);   // wirft ProviderUnavailableException
-public Map<ChatProvider, Boolean> available();        // Ollama: /api/tags erreichbar; Claude: API-Key gesetzt
+public Map<ChatProvider, Boolean> available();        // Ollama: /api/tags erreichbar; Claude: CLI angemeldet
 public ChatProvider active();                          // aus Settings
 public List<String> models(ChatProvider provider);    // Ollama live aus /api/tags, Claude aus Config
 ```
 
 - Das Ollama-Probe (`OllamaApi.listModels()`) hat 2 s Timeout und wird 4 s gecacht – die Status-Seite pollt.
   Fehler → `false` bzw. leere Liste, Ursache im Log.
-- Der `AnthropicChatModel`-Bean existiert auch ohne Key; `clientFor(ANTHROPIC)` prüft den Key selbst.
-  „Verfügbar“ heißt bei Claude nur „Key vorhanden“, nicht „erreichbar“.
+- Der `ClaudeCliChatModel`-Bean existiert auch ohne CLI; `clientFor(ANTHROPIC)` prüft die Anmeldung selbst.
+  „Verfügbar“ heißt bei Claude nur „`claude auth status` endet mit Exit 0“ (30 s gecacht), nicht „erreichbar“.
 - `clientFor(OLLAMA)` prüft die Erreichbarkeit nicht vorab; ein toter Server zeigt sich in der Anfrage als `Error`.
+
+### `ClaudeCliChatModel` (ADR 0006)
+
+Pro Anfrage ein `claude -p`-Prozess in einem leeren Temp-Verzeichnis. Der Verlauf aus den Advisors geht als Text an
+stdin, der System-Prompt als Datei. Der Lauf endet erst nach dem Aufräumen: Prozess beendet, Token ungültig,
+Verzeichnis gelöscht. Abbruch (Client weg) und `idle-timeout` beenden den Prozess ebenfalls.
+
+- `ClaudeStreamParser` liest `stream-json`. Antworttext kommt nur aus `text_delta`, Fehler aus dem `result`-Ereignis
+  und dem `error`-Feld der synthetischen `assistant`-Nachricht.
+- `ClaudeToolBridge` hält Tools und `ToolContext` je Lauf unter einem Zufalls-Token. `web/ClaudeMcpController`
+  (`POST /internal/claude-mcp`) beantwortet damit die MCP-Aufrufe der CLI; die Tools laufen wie bei Ollama durch
+  `ListenerToolCallback` und `ConfirmationGate`.
+- Leere Argumente immer als `--x=` schreiben: Java verwirft `""` unter Windows stillschweigend.
 
 Wird von `settings/` (Dropdown) und `status/` (Ampel) nur gelesen.
 
@@ -207,13 +220,11 @@ spring:
       init.pull-model-strategy: never
       chat.options: { model: qwen3:8b, keep-alive: 30m }
       embedding.options.model: bge-m3
-    anthropic:
-      api-key: ${ANTHROPIC_API_KEY:}        # nur aus Umgebungsvariable
     chat:
       client.enabled: false                 # ChatClients baut ChatClientConfig selbst (ADR 0002)
       memory.repository.jdbc.initialize-schema: never   # Schema kommt aus Flyway V1
     model:
-      embedding: ollama                     # spring.ai.model.chat bewusst NICHT setzen
+      embedding: ollama
 jarvis:
   assistant:
     default-provider: OLLAMA
@@ -232,11 +243,10 @@ jarvis:
         rechner: C:\Windows\System32\calc.exe
 ```
 
-- `spring.ai.model.chat` ist einwertig: Setzt man es auf `ollama`, fehlt der Anthropic-`ChatModel` (und umgekehrt).
 - Die H2-Konsole ist standardmäßig aus (Schutz vor DNS-Rebinding auf `127.0.0.1`); lokal zum Debuggen
   mit `SPRING_H2_CONSOLE_ENABLED=true` einschalten.
 - Tests: `src/test/resources/config/application.yml` überlagert die Haupt-Config (H2 in-memory,
-  VectorStore-Datei im Temp-Verzeichnis) statt sie zu ersetzen.
+  VectorStore-Datei im Temp-Verzeichnis, nicht vorhandene Claude-CLI) statt sie zu ersetzen.
 
 ## Spring AI 2.0.1 – Abweichungen von 1.x-Beispielen
 

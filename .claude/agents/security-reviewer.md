@@ -113,7 +113,7 @@ If you find a CRITICAL vulnerability:
 This is **Jarvis** (Spring Boot 4 / Java 21, Maven — not npm; use `./mvnw dependency:tree` and
 check versions instead of `npm audit`). The dashboard has no auth and no rate limiting by design:
 it binds only to `127.0.0.1` (see `docs/adr/0001-llm-auf-separatem-server.md`) — don't flag that
-absence. Do flag: `server.address` not `127.0.0.1`; `ANTHROPIC_API_KEY` / `jarvis.voice.token`
+absence. Do flag: `server.address` not `127.0.0.1`; `jarvis.voice.token`
 outside environment variables or in logs; the LLM server reachable beyond the Jarvis PC;
 `openApplication` accepting anything outside its allowlist or passing model output into a shell;
 tools that act on the PC without confirmation; prompt-injection paths from uploaded documents or

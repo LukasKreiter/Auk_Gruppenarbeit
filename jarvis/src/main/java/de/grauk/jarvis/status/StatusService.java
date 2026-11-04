@@ -90,7 +90,7 @@ public class StatusService {
         Light ollamaLight = light("ollama", "Ollama (LLM-Server)", o);
         Light claudeLight = light("claude", "Claude", guardHealth("claude", claude::health));
         if (active == ChatProvider.ANTHROPIC && claudeLight.state() == State.UNKNOWN) {
-            claudeLight = new Light("claude", "Claude", State.DOWN, "aktiver Provider nicht verfügbar (kein API-Key)");
+            claudeLight = new Light("claude", "Claude", State.DOWN, "aktiver Provider nicht verfügbar (CLI fehlt oder nicht angemeldet)");
         }
         Light voiceLight = light("voice", "voice-service", guardHealth("voice", voiceIndicator::health));
         List<Light> lights = List.of(ollamaLight, claudeLight, voiceLight, database());

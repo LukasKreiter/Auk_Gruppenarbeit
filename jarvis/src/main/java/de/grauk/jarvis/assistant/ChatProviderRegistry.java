@@ -15,7 +15,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.ollama.api.OllamaApi;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /** Hält je Provider einen ChatClient und kennt Verfügbarkeit und Modelllisten. Kein Fallback zwischen Providern (ADR 0005). */
@@ -30,30 +29,29 @@ public class ChatProviderRegistry {
     private final SettingsService settings;
     private final AssistantProperties properties;
     private final ObjectProvider<OllamaApi> ollamaApi;
-    private final String anthropicApiKey;
+    private final ClaudeCliStatus claudeCli;
 
     private record OllamaProbe(Optional<List<String>> models, long takenAtNanos) {}
 
     private volatile OllamaProbe probe;
 
     public ChatProviderRegistry(ChatClients clients, SettingsService settings, AssistantProperties properties,
-                                ObjectProvider<OllamaApi> ollamaApi,
-                                @Value("${spring.ai.anthropic.api-key:}") String anthropicApiKey) {
+                                ObjectProvider<OllamaApi> ollamaApi, ClaudeCliStatus claudeCli) {
         this.clients = clients;
         this.settings = settings;
         this.properties = properties;
         this.ollamaApi = ollamaApi;
-        this.anthropicApiKey = anthropicApiKey;
+        this.claudeCli = claudeCli;
     }
 
     /**
-     * @throws ProviderUnavailableException wenn der Provider nicht konfiguriert ist (Claude ohne API-Key).
+     * @throws ProviderUnavailableException wenn der Provider nicht eingerichtet ist (Claude-CLI fehlt oder ist nicht angemeldet).
      *         Ob der LLM-Server läuft, prüft erst der Aufruf selbst; der Fehler wird dort gemeldet.
      */
     public ChatClient clientFor(ChatProvider provider) {
-        if (provider == ChatProvider.ANTHROPIC && !anthropicKeyPresent()) {
+        if (provider == ChatProvider.ANTHROPIC && !claudeCli.ready()) {
             throw new ProviderUnavailableException(provider,
-                    "Claude ist nicht konfiguriert – die Umgebungsvariable ANTHROPIC_API_KEY fehlt");
+                    "Claude ist nicht eingerichtet – Claude Code installieren und im Terminal „claude auth login“ ausführen");
         }
         ChatClient client = clients.byProvider().get(provider);
         if (client == null) {
@@ -62,11 +60,11 @@ public class ChatProviderRegistry {
         return client;
     }
 
-    /** Ollama: /api/tags erreichbar (kurz gecacht, die Statusseite pollt); Claude: API-Key gesetzt. */
+    /** Ollama: /api/tags erreichbar (kurz gecacht, die Statusseite pollt); Claude: CLI angemeldet (ebenfalls gecacht). */
     public Map<ChatProvider, Boolean> available() {
         Map<ChatProvider, Boolean> result = new EnumMap<>(ChatProvider.class);
         result.put(ChatProvider.OLLAMA, ollamaModels().isPresent());
-        result.put(ChatProvider.ANTHROPIC, anthropicKeyPresent() && clients.byProvider().containsKey(ChatProvider.ANTHROPIC));
+        result.put(ChatProvider.ANTHROPIC, claudeCli.ready() && clients.byProvider().containsKey(ChatProvider.ANTHROPIC));
         return result;
     }
 
@@ -80,10 +78,6 @@ public class ChatProviderRegistry {
             case OLLAMA -> ollamaModels().orElse(List.of());
             case ANTHROPIC -> properties.anthropicModels();
         };
-    }
-
-    private boolean anthropicKeyPresent() {
-        return anthropicApiKey != null && !anthropicApiKey.isBlank();
     }
 
     private Optional<List<String>> ollamaModels() {

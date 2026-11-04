@@ -12,7 +12,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-import com.anthropic.errors.AnthropicServiceException;
 import de.grauk.jarvis.settings.SettingsService;
 import de.grauk.jarvis.settings.SettingsService.SettingsSnapshot;
 import de.grauk.jarvis.tools.ToolCallStatus;
@@ -21,7 +20,6 @@ import de.grauk.jarvis.tools.ToolRegistry;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.Message;
@@ -45,11 +43,6 @@ import reactor.core.scheduler.Schedulers;
 public class AssistantService {
 
     private static final Logger log = LoggerFactory.getLogger(AssistantService.class);
-
-    /** Claude verlangt max_tokens; mit Thinking muss es größer als das Thinking-Budget sein. */
-    private static final int ANTHROPIC_MAX_TOKENS = 4096;
-    private static final int ANTHROPIC_MAX_TOKENS_THINKING = 8192;
-    private static final long ANTHROPIC_THINKING_BUDGET = 2048;
 
     private final ChatProviderRegistry registry;
     private final SettingsService settings;
@@ -224,20 +217,8 @@ public class AssistantService {
                 }
                 yield b;
             }
-            case ANTHROPIC -> {
-                AnthropicChatOptions.Builder b = AnthropicChatOptions.builder();
-                b.model(s.model());
-                if (s.thinkMode()) {
-                    // Extended Thinking erlaubt keine frei gewählte Temperatur
-                    b.maxTokens(ANTHROPIC_MAX_TOKENS_THINKING);
-                    b.thinkingEnabled(ANTHROPIC_THINKING_BUDGET);
-                } else {
-                    b.maxTokens(ANTHROPIC_MAX_TOKENS);
-                    b.temperature(s.temperature());
-                    b.thinkingDisabled();
-                }
-                yield b;
-            }
+            // die CLI kennt keine Temperatur (ADR 0006)
+            case ANTHROPIC -> ClaudeCliChatOptions.builder().model(s.model()).thinking(s.thinkMode());
         };
     }
 
@@ -257,16 +238,13 @@ public class AssistantService {
         boolean claude = provider == ChatProvider.ANTHROPIC;
         if (isInChain(error, ConnectException.class, UnknownHostException.class)) {
             return claude
-                    ? "Claude ist nicht erreichbar – bitte Internetverbindung und API-Key prüfen"
+                    ? "Claude ist nicht erreichbar – bitte Internetverbindung prüfen"
                     : "LLM-Server nicht erreichbar – in den Einstellungen kann Claude gewählt werden";
         }
         if (isInChain(error, SocketTimeoutException.class, TimeoutException.class)) {
             return "Zeitüberschreitung – " + (claude ? "Claude" : "der LLM-Server") + " antwortet nicht.";
         }
         int status = httpStatus(error);
-        if ((status == 401 || status == 403) && claude) {
-            return "Claude: API-Key ungültig";
-        }
         if (status == 404) {
             return "Modell nicht gefunden – in den Einstellungen ein anderes Modell wählen";
         }
@@ -288,7 +266,7 @@ public class AssistantService {
         return false;
     }
 
-    /** HTTP-Status aus Spring-RestClient-, WebClient- oder Anthropic-SDK-Fehlern, sonst -1. */
+    /** HTTP-Status aus Spring-RestClient- oder WebClient-Fehlern, sonst -1. */
     private static int httpStatus(Throwable error) {
         for (Throwable t = error; t != null; t = t.getCause()) {
             if (t instanceof RestClientResponseException r) {
@@ -296,9 +274,6 @@ public class AssistantService {
             }
             if (t instanceof WebClientResponseException w) {
                 return w.getStatusCode().value();
-            }
-            if (t instanceof AnthropicServiceException a) {
-                return a.statusCode();
             }
         }
         return -1;

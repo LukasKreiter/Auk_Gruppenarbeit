@@ -9,3 +9,6 @@ jarvis:
   assistant:
     anthropic-models:
       - claude-sonnet-5-5
+    claude-cli:
+      # Tests dürfen keine echte CLI starten, auch nicht auf Entwickler-PCs mit Anmeldung
+      executable: jarvis-test-keine-claude-cli

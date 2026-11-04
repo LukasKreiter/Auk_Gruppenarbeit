@@ -193,10 +193,9 @@ public class SettingsService {
         if (s.getSystemPrompt().length() > MAX_SYSTEM_PROMPT_LENGTH) {
             throw new IllegalArgumentException("System-Prompt ist länger als " + MAX_SYSTEM_PROMPT_LENGTH + " Zeichen");
         }
-        // Claude erlaubt nur 0–1, Ollama 0–2
-        double max = s.getProvider() == ChatProvider.ANTHROPIC ? 1.0 : 2.0;
-        if (Double.isNaN(s.getTemperature()) || s.getTemperature() < 0.0 || s.getTemperature() > max) {
-            throw new IllegalArgumentException("Temperatur muss zwischen 0.0 und " + max + " liegen");
+        // Grenze von Ollama; bei Claude hat die Temperatur keine Wirkung (ADR 0006)
+        if (Double.isNaN(s.getTemperature()) || s.getTemperature() < 0.0 || s.getTemperature() > 2.0) {
+            throw new IllegalArgumentException("Temperatur muss zwischen 0.0 und 2.0 liegen");
         }
     }
 

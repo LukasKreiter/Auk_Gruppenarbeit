@@ -31,7 +31,7 @@ Score = Wahrscheinlichkeit (W) × Auswirkung (A), je Skala 1–5.
 | R09 | Prompt-Injection über Dokumente (RAG) oder Tool-Ergebnisse | Sicherheit | 5, 6 | 3 | 4 | **12** | Hiebler | Offen |
 | R10 | `openApplication` führt unerwünschte Programme aus | Sicherheit | 5 | 2 | 5 | **10** | Brenner | Gemindert |
 | R11 | Datenschutz: Anthropic-Provider sendet Inhalte in die Cloud | Datenschutz | 4 | 3 | 4 | **12** | Kreiter | Offen |
-| R12 | API-Key (`ANTHROPIC_API_KEY`) versehentlich committed | Sicherheit | alle | 2 | 5 | **10** | Kreiter | Gemindert |
+| R12 | Secret (`JARVIS_VOICE_TOKEN`) versehentlich committed; Claude braucht seit ADR 0006 keinen Key mehr | Sicherheit | alle | 2 | 5 | **10** | Kreiter | Gemindert |
 | R13 | Halluzinationen / falsche Antworten, auch bei RAG-Kontext | Qualität | 6 | 4 | 3 | **12** | Hiebler | Offen |
 | R14 | Vector-Store (JSON) und DB laufen auseinander | Daten | 6 | 3 | 3 | 9 | Brenner | Offen |
 | R15 | Embedding-Modellwechsel macht Index unbrauchbar | Daten | 6 | 2 | 3 | 6 | Brenner | Offen |
@@ -47,6 +47,7 @@ Score = Wahrscheinlichkeit (W) × Auswirkung (A), je Skala 1–5.
 | R25 | Mikrofonzugriff blockiert (Browser-Berechtigung, nicht-localhost) | Technik | 2 | 3 | 3 | 9 | Zheng | Offen |
 | R26 | Zeitplan / Scope Creep (Phase 7, Always-on-Listener) | Projekt | alle | 4 | 3 | **12** | Kreiter | Offen |
 | R27 | Ungeschützte Dashboard-Endpunkte (keine Auth im MVP) | Sicherheit | 4 | 2 | 3 | 6 | Kreiter | Akzeptiert |
+| R28 | Claude-CLI ändert Flags oder Ausgabeformat; Abo-Limit bricht den Cloud-Modus ab | Abhängigkeit | 4 | 3 | 2 | 6 | Brenner | Offen |
 
 ## Details und Maßnahmen
 
@@ -88,7 +89,7 @@ Score = Wahrscheinlichkeit (W) × Auswirkung (A), je Skala 1–5.
 **R11 – Datenschutz bei Cloud-Provider.** Die Architektur ist „komplett lokal“, der Anthropic-Provider sendet Eingaben jedoch an einen externen Dienst.
 - Maßnahme: Standardprovider `OLLAMA` beibehalten; im Dashboard sichtbar kennzeichnen, wenn ein Cloud-Modell aktiv ist; keine Dokument-/Faktendaten ungefragt an die Cloud geben.
 
-**R12 – Secret-Leak.** Der Key wird nur aus der Umgebungsvariable gelesen (ADR 0002).
+**R12 – Secret-Leak.** Secrets werden nur aus Umgebungsvariablen gelesen. Claude nutzt die Anmeldung der CLI, ein Key existiert nicht mehr (ADR 0006).
 - Maßnahme: GitHub Secret Scanning und Push Protection aktivieren; `.env` in `.gitignore`.
 
 **R13 – Halluzinationen.** Das Modell kann falsche Fakten liefern oder RAG-Kontext falsch wiedergeben.

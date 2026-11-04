@@ -85,7 +85,7 @@ class AssistantServiceTest {
         when(toolRegistry.enabledCallbacks()).thenReturn(List.of());
     }
 
-    private AssistantService service(ChatModel ollama, ChatModel anthropic, String anthropicKey) {
+    private AssistantService service(ChatModel ollama, ChatModel anthropic) {
         GuardedRagAdvisor rag = new GuardedRagAdvisor(QuestionAnswerAdvisor.builder(vectorStore)
                 .searchRequest(SearchRequest.builder().similarityThreshold(0.6).topK(4).build())
                 .promptTemplate(PromptTemplates.ragTemplate()).build());
@@ -97,7 +97,7 @@ class AssistantServiceTest {
         @SuppressWarnings("unchecked")
         ObjectProvider<OllamaApi> api = mock(ObjectProvider.class);
         ChatProviderRegistry registry = new ChatProviderRegistry(new ChatClients(clients), settings,
-                new AssistantProperties(null, null, null), api, anthropicKey);
+                new AssistantProperties(null, null, null), api, mock(ClaudeCliStatus.class));
         return new AssistantService(registry, settings, toolRegistry, chatMemory);
     }
 
@@ -108,7 +108,7 @@ class AssistantServiceTest {
     @Test
     void streamsTokensAndEndsWithDone() {
         FakeChatModel model = new FakeChatModel("Hal", "lo ", "Welt");
-        List<AssistantEvent> events = collect(service(model, null, "").stream(1, "Hi"));
+        List<AssistantEvent> events = collect(service(model, null).stream(1, "Hi"));
 
         assertThat(events.subList(0, 3)).containsExactly(
                 new AssistantEvent.Token("Hal"), new AssistantEvent.Token("lo "), new AssistantEvent.Token("Welt"));
@@ -124,7 +124,7 @@ class AssistantServiceTest {
     @Test
     void followUpContainsPreviousExchange() {
         FakeChatModel model = new FakeChatModel("Antwort Eins");
-        AssistantService service = service(model, null, "");
+        AssistantService service = service(model, null);
         collect(service.stream(7, "Erste Frage"));
         collect(service.stream(7, "Zweite Frage"));
         collect(service.stream(8, "Andere Konversation"));
@@ -141,7 +141,7 @@ class AssistantServiceTest {
         FakeChatModel ollama = new FakeChatModel("nie");
         FakeChatModel anthropic = new FakeChatModel("nie");
 
-        List<AssistantEvent> events = collect(service(ollama, anthropic, "").stream(1, "Hi"));
+        List<AssistantEvent> events = collect(service(ollama, anthropic).stream(1, "Hi"));
 
         assertThat(events).hasSize(1);
         assertThat(events.getFirst()).isInstanceOf(AssistantEvent.Error.class);
@@ -154,7 +154,7 @@ class AssistantServiceTest {
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenThrow(new IllegalStateException("Embedding-Server weg"));
         FakeChatModel model = new FakeChatModel("Trotzdem", " da");
 
-        List<AssistantEvent> events = collect(service(model, null, "").stream(1, "Hi"));
+        List<AssistantEvent> events = collect(service(model, null).stream(1, "Hi"));
 
         assertThat(events).anyMatch(e -> e instanceof AssistantEvent.Warning);
         assertThat(events.getLast()).isInstanceOfSatisfying(AssistantEvent.Done.class,
@@ -170,7 +170,7 @@ class AssistantServiceTest {
                         new java.net.ConnectException("Connection refused")));
             }
         };
-        List<AssistantEvent> events = collect(service(broken, null, "").stream(1, "Hi"));
+        List<AssistantEvent> events = collect(service(broken, null).stream(1, "Hi"));
 
         assertThat(events).containsExactly(
                 new AssistantEvent.Error("LLM-Server nicht erreichbar – in den Einstellungen kann Claude gewählt werden"));
@@ -216,7 +216,7 @@ class AssistantServiceTest {
             }
         };
 
-        List<AssistantEvent> events = collect(service(model, null, "").stream(1, "Timer 5 Minuten"));
+        List<AssistantEvent> events = collect(service(model, null).stream(1, "Timer 5 Minuten"));
 
         assertThat(events).contains(new AssistantEvent.ToolCalled("timer", "{\"minutes\":5}"));
         assertThat(events).anyMatch(e -> e instanceof AssistantEvent.ConfirmationRequired);
@@ -235,10 +235,10 @@ class AssistantServiceTest {
                 return Flux.error(new IllegalStateException("weg"));
             }
         };
-        collect(service(good, null, "").stream(3, "Frage"));
-        collect(service(broken, null, "").stream(3, "Nochmal"));
-        collect(service(broken, null, "").stream(3, "Frage"));
-        collect(service(new FakeChatModel(""), null, "").stream(3, "Leer"));
+        collect(service(good, null).stream(3, "Frage"));
+        collect(service(broken, null).stream(3, "Nochmal"));
+        collect(service(broken, null).stream(3, "Frage"));
+        collect(service(new FakeChatModel(""), null).stream(3, "Leer"));
 
         // die erste, beantwortete gleichlautende Frage bleibt; die unbeantworteten verschwinden
         assertThat(chatMemory.get("3")).extracting(Message::getText).containsExactly("Frage", "Antwort");
@@ -246,7 +246,7 @@ class AssistantServiceTest {
 
     @Test
     void cleanupNeverRemovesAnAnsweredTurn() {
-        AssistantService service = service(new FakeChatModel("Antwort"), null, "");
+        AssistantService service = service(new FakeChatModel("Antwort"), null);
         collect(service.stream(4, "Frage"));
 
         service.forgetUnansweredTurn(4, "Frage");
@@ -288,7 +288,7 @@ class AssistantServiceTest {
             }
         };
 
-        List<AssistantEvent> events = collect(service(model, null, "").stream(1, "Timer"));
+        List<AssistantEvent> events = collect(service(model, null).stream(1, "Timer"));
 
         assertThat(events.getLast()).isInstanceOfSatisfying(AssistantEvent.Error.class,
                 error -> assertThat(error.toolCalls()).containsExactly(new ToolCallRecord("timer", "{}", "ok")));
@@ -296,7 +296,7 @@ class AssistantServiceTest {
 
     @Test
     void blankAnswerYieldsError() {
-        List<AssistantEvent> events = collect(service(new FakeChatModel(""), null, "").stream(1, "Hi"));
+        List<AssistantEvent> events = collect(service(new FakeChatModel(""), null).stream(1, "Hi"));
 
         assertThat(events).containsExactly(new AssistantEvent.Error("Das Modell hat keine Antwort geliefert."));
     }
@@ -316,7 +316,6 @@ class AssistantServiceTest {
         assertThat(AssistantService.userMessage(ChatProvider.ANTHROPIC, new java.util.concurrent.TimeoutException()))
                 .isEqualTo("Zeitüberschreitung – Claude antwortet nicht.");
 
-        assertThat(AssistantService.userMessage(ChatProvider.ANTHROPIC, status(401))).isEqualTo("Claude: API-Key ungültig");
         assertThat(AssistantService.userMessage(ChatProvider.OLLAMA, status(404))).startsWith("Modell nicht gefunden");
         assertThat(AssistantService.userMessage(ChatProvider.OLLAMA, status(429))).startsWith("Rate-Limit erreicht");
         assertThat(AssistantService.userMessage(ChatProvider.OLLAMA, status(500)))

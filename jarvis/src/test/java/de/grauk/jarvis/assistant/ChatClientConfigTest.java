@@ -7,8 +7,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Prüft die Verdrahtung im echten Kontext (ohne Ollama/Anthropic; kein API-Key gesetzt). */
-@SpringBootTest(properties = "spring.ai.anthropic.api-key=")
+/** Prüft die Verdrahtung im echten Kontext (ohne Ollama und ohne CLI, siehe test/resources/config/application.yml). */
+@SpringBootTest
 class ChatClientConfigTest {
 
     @Autowired
@@ -18,11 +18,11 @@ class ChatClientConfigTest {
     ChatProviderRegistry registry;
 
     @Test
-    void ollamaClientExistsAndClaudeIsUnavailableWithoutKey() {
+    void ollamaClientExistsAndClaudeIsUnavailableWithoutCli() {
         assertThat(clients.byProvider()).containsKey(ChatProvider.OLLAMA);
         assertThat(registry.available().get(ChatProvider.ANTHROPIC)).isFalse();
         assertThatThrownBy(() -> registry.clientFor(ChatProvider.ANTHROPIC))
                 .isInstanceOf(ProviderUnavailableException.class);
-        assertThat(clients.byProvider()).containsKey(ChatProvider.ANTHROPIC); // Bean existiert auch ohne Key
+        assertThat(clients.byProvider()).containsKey(ChatProvider.ANTHROPIC); // Bean existiert auch ohne CLI
     }
 }

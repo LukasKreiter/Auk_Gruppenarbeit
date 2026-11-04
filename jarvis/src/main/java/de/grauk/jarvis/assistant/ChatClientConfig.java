@@ -3,7 +3,6 @@ package de.grauk.jarvis.assistant;
 import java.util.EnumMap;
 import java.util.Map;
 
-import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
@@ -19,13 +18,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 
 /**
  * Baut ChatClients, Chat-Verlauf und Advisors explizit (ADR 0002). Es gibt bewusst keinen
  * ChatClient.Builder aus der Autokonfiguration (spring.ai.chat.client.enabled=false), da zwei ChatModels existieren.
  */
 @Configuration
-@EnableConfigurationProperties(AssistantProperties.class)
+@EnableConfigurationProperties({AssistantProperties.class, ClaudeCliProperties.class})
 public class ChatClientConfig {
 
     @Bean
@@ -53,7 +53,15 @@ public class ChatClientConfig {
     }
 
     @Bean
-    ChatClients chatClients(ObjectProvider<OllamaChatModel> ollama, ObjectProvider<AnthropicChatModel> anthropic,
+    ClaudeCliChatModel claudeCliChatModel(ClaudeCliLauncher launcher, ClaudeToolBridge bridge,
+                                          ClaudeCliProperties properties, Environment environment) {
+        // local.server.port kennt auch einen zufälligen Port; erst zur Laufzeit gesetzt, daher pro Aufruf gelesen
+        return new ClaudeCliChatModel(launcher, bridge, properties, () -> environment.getProperty(
+                "local.server.port", Integer.class, environment.getProperty("server.port", Integer.class, 8080)));
+    }
+
+    @Bean
+    ChatClients chatClients(ObjectProvider<OllamaChatModel> ollama, ClaudeCliChatModel claude,
                             MessageChatMemoryAdvisor memoryAdvisor, GuardedRagAdvisor ragAdvisor) {
         Map<ChatProvider, ChatClient> clients = new EnumMap<>(ChatProvider.class);
         // Reihenfolge über getOrder(): Chat-Verlauf speichert den Originaltext, danach ergänzt RAG den Prompt
@@ -62,10 +70,7 @@ public class ChatClientConfig {
         if (o != null) {
             clients.put(ChatProvider.OLLAMA, ChatClient.builder(o).defaultAdvisors(advisors).build());
         }
-        AnthropicChatModel a = anthropic.getIfAvailable();
-        if (a != null) {
-            clients.put(ChatProvider.ANTHROPIC, ChatClient.builder(a).defaultAdvisors(advisors).build());
-        }
+        clients.put(ChatProvider.ANTHROPIC, ChatClient.builder(claude).defaultAdvisors(advisors).build());
         return new ChatClients(clients);
     }
 }

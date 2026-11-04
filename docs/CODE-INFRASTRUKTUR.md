@@ -81,7 +81,7 @@ Regeln:
 
 `web/` nutzt es über `SettingsWebService` (Teil-Updates). Provider-Wechsel ohne Modell → erstes Modell der Liste des neuen
 Providers; ist die Liste leer, `fallbackModel` (+ `log.warn`), sonst `400`; nie das Modell des alten Providers. Beim Wechsel auf
-Claude wird eine nicht mitgegebene Temperatur > 1 auf 1.0 begrenzt (`log.info`); eine explizit zu hohe Temperatur ergibt `400`.
+Claude bleibt die Temperatur unverändert (sie wirkt dort nicht, ADR 0006); eine Temperatur über 2.0 ergibt `400`.
 
 ## Paket `web/`
 
@@ -104,6 +104,8 @@ Claude wird eine nicht mitgegebene Temperatur > 1 auf 1.0 begrenzt (`log.info`);
 ### Endpoints (JSON)
 
 Alle zustandsändernden Requests brauchen einen gültigen `Origin`- oder `Referer`-Header (Browser senden ihn von selbst).
+Einzige Ausnahme: `POST /internal/claude-mcp`, der MCP-Endpunkt für die Claude-CLI; er verlangt stattdessen das
+Bearer-Token des laufenden CLI-Prozesses (`401` ohne gültiges Token, ADR 0006).
 Fehler haben immer die Form `{"type":"about:blank","title":"Not Found","status":404,"detail":"…"}` – `detail` ist für Nutzer lesbar.
 
 | Methode, Pfad | Request | Response |
@@ -145,7 +147,7 @@ SettingsView    { settings: SettingsDto, available: {OLLAMA: bool, ANTHROPIC: bo
                   models: {OLLAMA: [String], ANTHROPIC: [String]}, defaultSystemPrompt }
 ```
 
-`available.ANTHROPIC` heißt nur „Key vorhanden“; `models.OLLAMA` ist leer, wenn der LLM-Server nicht erreichbar ist.
+`available.ANTHROPIC` heißt nur „Claude-CLI angemeldet“; `models.OLLAMA` ist leer, wenn der LLM-Server nicht erreichbar ist.
 
 ### SSE-Chat-Stream (`POST /api/conversations/{id}/messages`)
 
@@ -311,7 +313,7 @@ statischen, synchronisierten Ringpuffer. Statischer Zugriff: `getLines()`, `getL
 | `VoiceHealth` | Record: `up`, `message`, `models`, `gpuName`, `gpuMemoryUsedBytes/TotalBytes`, `gpuUtilization` (0..1), `checkedAt`. |
 | `VoiceHealthIndicator` | Actuator-Komponente `voice` (Boot-4-Paket `org.springframework.boot.health.contributor`); nutzt den gecachten Client, Details ohne Secrets. |
 | `OllamaHealthIndicator` | Komponente `ollama` über `ChatProviderRegistry.available()/models(OLLAMA)` (bereits 4 s gecacht, kein zweiter Probe). Nicht erreichbar → `DOWN`. |
-| `ClaudeHealthIndicator` | Komponente `claude`: Key vorhanden → `UP` („konfiguriert“), sonst `UNKNOWN` („kein Key“), nie `DOWN`. `UNKNOWN` verschlechtert den Gesamtstatus nicht. Kein Netzwerkaufruf. |
+| `ClaudeHealthIndicator` | Komponente `claude`: CLI angemeldet → `UP` („angemeldet“), sonst `UNKNOWN` („CLI fehlt oder nicht angemeldet“), nie `DOWN`. `UNKNOWN` verschlechtert den Gesamtstatus nicht. Kein Modellaufruf. |
 | `MetricsService` | `snapshot()` (Vertrag für `SystemTools`), `recordStt/recordLlm/recordTts(ms)`, `lastLatencies()`. CPU/RAM über OSHI (CPU-Last per Tick-Differenz zur vorigen Messung, höchstens 1×/s neu berechnet, nie blockierend; Fallback JMX), GPU-Speicher aus `VoiceHealthClient`, sonst `null`. Micrometer-Timer `jarvis.latency` mit Tag `stage=stt|llm|tts` (sichtbar unter `/actuator/metrics/jarvis.latency?tag=stage:llm`). |
 | `LatencyRestorer` | Lädt bei `ApplicationReadyEvent` die letzten Latenzen aus `message` (jüngste Zeile mit `stt_ms`/`llm_ms`/`tts_ms`); Timer bleiben unberührt, bereits gemessene Werte werden nicht überschrieben. |
 | `StatusService` | baut den `StatusReport` für Seite, Fragment und JSON (inkl. DB-Ampel per `Connection.isValid`). |
@@ -343,14 +345,14 @@ StatusReport { checkedAt, activeProvider: OLLAMA|ANTHROPIC,
 
 Robustheit: `StatusService.report()` sichert jeden Teilwert einzeln ab. Wirft ein Indikator, wird die Ampel `DOWN`
 („Prüfung fehlgeschlagen (Klasse)“), Listen bleiben leer; geloggt wird nur beim Zustandswechsel (warn mit Stacktrace).
-Ist der aktive Provider `ANTHROPIC` und Claude ohne Key (`UNKNOWN`), stuft die Statusseite die Claude-Ampel auf `DOWN`
-(„aktiver Provider nicht verfügbar (kein API-Key)“); der Health-Indikator selbst bleibt `UNKNOWN`.
+Ist der aktive Provider `ANTHROPIC` und Claude nicht bereit (`UNKNOWN`), stuft die Statusseite die Claude-Ampel auf `DOWN`
+(„aktiver Provider nicht verfügbar (CLI fehlt oder nicht angemeldet)“); der Health-Indikator selbst bleibt `UNKNOWN`.
 `VoiceHealthClient` unterscheidet „Token ungültig (HTTP 401/403)“, „HTTP &lt;code&gt;“ und „Timeout/Verbindung fehlgeschlagen“,
 hängt „down seit &lt;Zeit&gt;“ an, wertet nicht lesbare/leere Antworten als `down` („Antwort nicht lesbar (kein voice-service?)“) und ruft das Netz
 nur als Single-Flight ab (parallele Aufrufer teilen sich einen Request oder bekommen den letzten Wert). CPU-Last
 NaN/negativ ist „unbekannt“ (-1). `LogBufferAppender.isActive()` zeigt, ob der Puffer aktiv ist.
 
-Ampelfarbe: `UP` grün, `DOWN` rot, `UNKNOWN` grau (z. B. Claude ohne Key – kein Fehler). „Geladene“ Ollama-Modelle sind hier die
+Ampelfarbe: `UP` grün, `DOWN` rot, `UNKNOWN` grau (z. B. Claude ohne CLI – kein Fehler). „Geladene“ Ollama-Modelle sind hier die
 installierten (`/api/tags`); `/api/ps` (wirklich im VRAM geladen) wird nicht abgefragt, um keinen zweiten Probe zu bauen.
 Ein Aufruf kann bis ca. 4 s dauern, wenn LLM-Server und voice-service nicht antworten (je 2 s Timeout, danach gecacht).
 

@@ -4,6 +4,6 @@ package de.grauk.jarvis.assistant;
 public enum ChatProvider {
     /** Ollama auf dem LLM-Server. */
     OLLAMA,
-    /** Claude über die Anthropic-API (Cloud-Modus). */
+    /** Claude über die angemeldete Claude-Code-CLI (Cloud-Modus, ADR 0006). */
     ANTHROPIC
 }

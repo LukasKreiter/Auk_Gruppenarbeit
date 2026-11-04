@@ -33,9 +33,6 @@ spring:
       embedding:
         options:
           model: bge-m3
-    anthropic:
-      # nur aus der Umgebungsvariable, nie hier eintragen (ADR 0002)
-      api-key: ${ANTHROPIC_API_KEY:}
     chat:
       client:
         # ChatClients werden in assistant/ChatClientConfig explizit gebaut (ADR 0002)
@@ -46,7 +43,6 @@ spring:
             # Schema kommt aus Flyway (db/migration)
             initialize-schema: never
     model:
-      # spring.ai.model.chat bewusst NICHT setzen, sonst fehlt einer der beiden ChatModels.
       # Embeddings immer Ollama/bge-m3 (ADR 0003)
       embedding: ollama
 
@@ -71,6 +67,11 @@ jarvis:
       - claude-sonnet-5-5
       - claude-haiku-4-5-20251001
     memory-window: 20
+    # Claude läuft über die angemeldete CLI ("claude auth login"), kein API-Key (ADR 0006)
+    claude-cli:
+      executable: ${JARVIS_CLAUDE_CLI:claude}
+      # länger als tools.confirmation-timeout: der Lauf wartet während einer Bestätigung
+      idle-timeout: 5m
   web:
     # Host-Header und Origin/Referer zustandsändernder Requests (DNS-Rebinding/CSRF, siehe LocalOnlyFilter)
     allowed-hosts: [localhost, 127.0.0.1]

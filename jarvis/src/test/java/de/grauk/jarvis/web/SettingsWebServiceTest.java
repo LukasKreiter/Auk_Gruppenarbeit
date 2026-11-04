@@ -87,13 +87,13 @@ class SettingsWebServiceTest {
     }
 
     @Test
-    void switchToAnthropicClampsTemperatureAboveOne() {
+    void switchToAnthropicKeepsTemperature() {
         stored(ChatProvider.OLLAMA, "qwen3:8b", 1.6);
         when(registry.models(ChatProvider.ANTHROPIC)).thenReturn(List.of("claude-a"));
 
         web.update(request(ChatProvider.ANTHROPIC, null, null));
 
-        assertThat(saved().getTemperature()).isEqualTo(1.0);
+        assertThat(saved().getTemperature()).isEqualTo(1.6);
     }
 
     @Test
@@ -101,9 +101,9 @@ class SettingsWebServiceTest {
         stored(ChatProvider.OLLAMA, "qwen3:8b", 0.7);
         when(registry.models(ChatProvider.ANTHROPIC)).thenReturn(List.of("claude-a"));
         when(settings.update(any(AssistantSettings.class)))
-                .thenThrow(new IllegalArgumentException("Temperatur muss zwischen 0.0 und 1.0 liegen"));
+                .thenThrow(new IllegalArgumentException("Temperatur muss zwischen 0.0 und 2.0 liegen"));
 
-        assertThatThrownBy(() -> web.update(request(ChatProvider.ANTHROPIC, null, 1.5)))
+        assertThatThrownBy(() -> web.update(request(ChatProvider.ANTHROPIC, null, 2.5)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

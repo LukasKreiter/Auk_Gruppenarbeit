@@ -80,12 +80,12 @@ class MetricsServiceTest {
     }
 
     @Test
-    void claudeIndicatorIsUnknownWithoutKeyAndUpWithKey() {
+    void claudeIndicatorIsUnknownWithoutLoginAndUpWithLogin() {
         ChatProviderRegistry providers = mock(ChatProviderRegistry.class);
         when(providers.available()).thenReturn(Map.of(ChatProvider.OLLAMA, false, ChatProvider.ANTHROPIC, false));
         var claude = new ClaudeHealthIndicator(providers);
         assertThat(claude.health().getStatus()).isEqualTo(Status.UNKNOWN);
-        assertThat(claude.health().getDetails()).containsEntry("message", "kein Key");
+        assertThat(claude.health().getDetails()).containsEntry("message", "CLI fehlt oder nicht angemeldet");
 
         when(providers.available()).thenReturn(Map.of(ChatProvider.OLLAMA, false, ChatProvider.ANTHROPIC, true));
         assertThat(claude.health().getStatus()).isEqualTo(Status.UP);

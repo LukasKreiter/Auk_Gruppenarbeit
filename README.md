@@ -7,7 +7,8 @@ Sprache rein → lokales LLM → Sprache raus, plus ein Web-Dashboard, das den A
 verwaltet (Chat-Verlauf, Modell/Prompt, Systemstatus, Tools, Wissen). Die Spring-Boot-
 Anwendung `jarvis` läuft auf dem Arbeitsplatz-PC und ist das Herzstück: sie orchestriert alle
 Dienste und liefert das Dashboard. LLM (Ollama) und voice-service laufen auf einem separaten
-GPU-Server im LAN. Optional kann statt des lokalen Modells ein Cloud-Modell (Claude) gewählt werden.
+GPU-Server im LAN. Optional kann statt des lokalen Modells ein Cloud-Modell (Claude) gewählt werden; es läuft über die angemeldete
+Claude-Code-CLI (`claude auth login`), ein API-Key ist nicht nötig (ADR 0006).
 
 Weitere Doku: [`CONTEXT.md`](CONTEXT.md) (Fachbegriffe), [`docs/adr/`](docs/adr/) (Entscheidungen),
 [`docs/CODE.md`](docs/CODE.md) (Code-Doku Backend KI-Kern), [`docs/CODE-INFRASTRUKTUR.md`](docs/CODE-INFRASTRUKTUR.md) (Code-Doku Backend Infrastruktur).

@@ -8,7 +8,7 @@ import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.stereotype.Component;
 
 /**
- * Claude: nur „Key vorhanden“, kein Netzwerkaufruf. Ohne Key {@code UNKNOWN} (nie {@code DOWN}), weil Claude
+ * Claude: nur „CLI angemeldet“, kein Modellaufruf. Sonst {@code UNKNOWN} (nie {@code DOWN}), weil Claude
  * optional ist und {@code UNKNOWN} den Gesamtstatus nicht verschlechtert.
  */
 @Component
@@ -23,8 +23,8 @@ public class ClaudeHealthIndicator implements HealthIndicator {
     @Override
     public Health health() {
         if (Boolean.TRUE.equals(registry.available().get(ChatProvider.ANTHROPIC))) {
-            return Health.up().withDetail("message", "konfiguriert").build();
+            return Health.up().withDetail("message", "angemeldet").build();
         }
-        return Health.unknown().withDetail("message", "kein Key").build();
+        return Health.unknown().withDetail("message", "CLI fehlt oder nicht angemeldet").build();
     }
 }

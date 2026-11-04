@@ -1,6 +1,7 @@
 # 0002 – Chat-Provider zur Laufzeit umschaltbar (Ollama ↔ Claude)
 
-- **Status:** angenommen
+- **Status:** angenommen; Anbindung von Claude (Starter, API-Key, `AnthropicChatOptions`) ersetzt durch
+  [0006](0006-claude-ueber-cli-statt-api-key.md)
 - **Datum:** 2026-09-30
 
 ## Kontext
