@@ -30,7 +30,7 @@ public class DashboardController {
     public String dashboard(Model model) {
         views.conversationList(model, null);
         views.settings(model);
-        return "chat";
+        return "dashboard";
     }
 
     /**
